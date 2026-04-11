@@ -21,9 +21,9 @@ export default function QRPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center justify-center px-6 py-12">
+    <div className="h-dvh max-h-dvh bg-white flex flex-col items-center justify-center px-6 overflow-hidden">
       {/* Printable card */}
-      <div className="bg-white border border-neutral-200 rounded-2xl p-10 max-w-sm w-full text-center shadow-sm">
+      <div className="bg-white border border-neutral-200 rounded-2xl p-8 max-w-sm w-full text-center shadow-sm">
         {/* Header */}
         <p className="text-neutral-400 text-xs uppercase tracking-[0.3em] mb-2">
           The wedding of
@@ -32,10 +32,10 @@ export default function QRPage() {
           Sneha &amp; Venkatesh
         </h1>
 
-        <div className="w-12 h-px bg-neutral-300 mx-auto my-5" />
+        <div className="w-12 h-px bg-neutral-300 mx-auto my-3" />
 
         {/* QR Code */}
-        <div className="mx-auto w-48 h-48 mb-5">
+        <div className="mx-auto w-40 h-40 mb-4">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={`/api/qrcode?url=${encodeURIComponent(SITE_URL)}`}
@@ -53,7 +53,7 @@ export default function QRPage() {
           from the celebration.
         </p>
 
-        <div className="w-12 h-px bg-neutral-300 mx-auto my-5" />
+        <div className="w-12 h-px bg-neutral-300 mx-auto my-3" />
 
         <p className="text-neutral-400 text-[10px] tracking-wider uppercase">
           {SITE_URL.replace("https://", "")}
@@ -61,7 +61,7 @@ export default function QRPage() {
       </div>
 
       {/* Action buttons */}
-      <div className="flex gap-3 mt-8">
+      <div className="flex gap-3 mt-5">
         <button
           onClick={handleDownload}
           className="bg-black text-white text-sm font-medium px-6 py-3 rounded-full hover:bg-neutral-800 transition-colors"
@@ -79,7 +79,7 @@ export default function QRPage() {
       {/* Back link */}
       <a
         href="/"
-        className="mt-6 text-xs text-neutral-400 hover:text-black transition-colors"
+        className="mt-3 text-xs text-neutral-400 hover:text-black transition-colors"
       >
         &larr; Back to home
       </a>
