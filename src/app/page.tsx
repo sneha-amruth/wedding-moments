@@ -22,7 +22,7 @@ export default function Home() {
   if (loading) return <LoadingScreen />;
 
   return (
-    <main className="min-h-screen flex flex-col relative overflow-hidden bg-black">
+    <main className="h-dvh max-h-dvh flex flex-col relative overflow-hidden bg-black">
       {/* Full-bleed background image */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
@@ -35,7 +35,7 @@ export default function Home() {
       <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/30 to-black/80" />
 
       {/* Content — pinned to the bottom */}
-      <div className="relative z-10 mt-auto px-6 pb-10 pt-32 text-center">
+      <div className="relative z-10 mt-auto px-6 pb-[env(safe-area-inset-bottom,24px)] pt-16 text-center">
         {/* Couple names */}
         <p className="text-white/70 text-xs uppercase tracking-[0.3em] mb-3">
           The wedding of
@@ -45,7 +45,7 @@ export default function Home() {
         </h1>
 
         {/* Thin divider */}
-        <div className="w-16 h-px bg-white/40 mx-auto my-5" />
+        <div className="w-16 h-px bg-white/40 mx-auto my-4" />
 
         <p className="text-white/70 text-sm max-w-xs mx-auto leading-relaxed">
           Share your photos &amp; discover candid moments of yourself captured
@@ -55,14 +55,14 @@ export default function Home() {
         {/* CTA */}
         <button
           onClick={() => router.push("/login")}
-          className="mt-8 w-full max-w-xs mx-auto block bg-white text-black font-medium text-sm
+          className="mt-6 w-full max-w-xs mx-auto block bg-white text-black font-medium text-sm
             py-3.5 px-8 rounded-full transition-all duration-300
             hover:bg-white/90 active:scale-[0.98]"
         >
           Share Your Moments
         </button>
 
-        <p className="mt-4 text-white/40 text-xs">
+        <p className="mt-3 text-white/40 text-xs">
           No app download needed &middot; Takes 30 seconds
         </p>
       </div>
