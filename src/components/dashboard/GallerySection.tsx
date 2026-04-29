@@ -8,6 +8,14 @@ interface GallerySectionProps {
   onDelete: () => void;
 }
 
+function driveImageUrl(fileId: string, size = 1920): string {
+  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w${size}`;
+}
+
+function drivePreviewUrl(fileId: string): string {
+  return `https://drive.google.com/file/d/${fileId}/preview`;
+}
+
 export default function GallerySection({
   uploads,
   onDelete,
@@ -81,7 +89,7 @@ export default function GallerySection({
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={upload.thumbnail_url || upload.drive_view_url}
+                src={driveImageUrl(upload.drive_file_id, 400)}
                 alt={upload.file_name}
                 className="w-full h-full object-cover"
                 loading="lazy"
@@ -165,16 +173,16 @@ export default function GallerySection({
           {/* Image/Video */}
           <div className="flex-1 flex items-center justify-center p-4">
             {viewingUpload.file_type === "video" ? (
-              <video
-                src={viewingUpload.drive_view_url}
-                controls
-                className="max-w-full max-h-full rounded-lg"
-                autoPlay
+              <iframe
+                src={drivePreviewUrl(viewingUpload.drive_file_id)}
+                className="w-full h-full max-w-4xl rounded-lg"
+                allow="autoplay"
+                allowFullScreen
               />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={viewingUpload.drive_view_url}
+                src={driveImageUrl(viewingUpload.drive_file_id)}
                 alt={viewingUpload.file_name}
                 className="max-w-full max-h-full object-contain rounded-lg"
               />

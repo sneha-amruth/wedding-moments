@@ -12,7 +12,7 @@ export async function GET() {
     // Fetch all data in parallel
     const [guestsRes, uploadsRes, eventsRes] = await Promise.all([
       supabaseAdmin.from("guests").select("id, name, phone, created_at").eq("wedding_id", weddingId!),
-      supabaseAdmin.from("uploads").select("id, event_id, guest_id, file_name, file_type, file_size, drive_view_url, thumbnail_url, created_at").eq("wedding_id", weddingId!).order("created_at", { ascending: false }),
+      supabaseAdmin.from("uploads").select("id, event_id, guest_id, file_name, file_type, file_size, drive_file_id, drive_view_url, thumbnail_url, created_at").eq("wedding_id", weddingId!).order("created_at", { ascending: false }),
       supabaseAdmin.from("events").select("id, name, sort_order").eq("wedding_id", weddingId!).order("sort_order"),
     ]);
 
