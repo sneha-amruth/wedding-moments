@@ -1,30 +1,33 @@
 import { google, type drive_v3 } from "googleapis";
+import { OAuth2Client } from "google-auth-library";
 
-// Google Drive service account authentication
-// The service account must have access to the couple's Google Drive folder
-function getAuthClient() {
-  const key = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-  if (!key) return null;
+// Scope: only files this app creates — cannot see other Drive contents
+export const DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive.file"];
 
-  const credentials = JSON.parse(key);
-  return new google.auth.GoogleAuth({
-    credentials,
-    scopes: ["https://www.googleapis.com/auth/drive.file"],
-  });
+export const ROOT_FOLDER_ID = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID || "";
+
+export function getOAuthClient(redirectUri?: string): OAuth2Client {
+  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    throw new Error(
+      "Google OAuth not configured — missing GOOGLE_OAUTH_CLIENT_ID or GOOGLE_OAUTH_CLIENT_SECRET"
+    );
+  }
+  return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
 }
 
 function getDriveClient(): drive_v3.Drive {
-  const authClient = getAuthClient();
-  if (!authClient) {
+  const refreshToken = process.env.GOOGLE_OAUTH_REFRESH_TOKEN;
+  if (!refreshToken) {
     throw new Error(
-      "Google Drive not configured — missing GOOGLE_SERVICE_ACCOUNT_KEY"
+      "Google Drive not configured — missing GOOGLE_OAUTH_REFRESH_TOKEN. Visit /api/auth/google/start to obtain one."
     );
   }
-  return google.drive({ version: "v3", auth: authClient });
+  const auth = getOAuthClient();
+  auth.setCredentials({ refresh_token: refreshToken });
+  return google.drive({ version: "v3", auth });
 }
-
-// Root folder ID in the couple's Google Drive
-export const ROOT_FOLDER_ID = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID || "";
 
 /**
  * Find or create a folder inside a parent folder
@@ -34,9 +37,10 @@ export async function findOrCreateFolder(
   parentId: string
 ): Promise<string> {
   const drive = getDriveClient();
-  // Check if folder already exists
+  // Escape single quotes in the folder name for the query
+  const safeName = name.replace(/'/g, "\\'");
   const response = await drive.files.list({
-    q: `name='${name}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+    q: `name='${safeName}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
     fields: "files(id, name)",
     spaces: "drive",
   });
@@ -45,7 +49,6 @@ export async function findOrCreateFolder(
     return response.data.files[0].id!;
   }
 
-  // Create the folder
   const folder = await drive.files.create({
     requestBody: {
       name,
@@ -74,11 +77,9 @@ export async function uploadFileToDrive(
   thumbnailLink: string | null;
 }> {
   const drive = getDriveClient();
-  // Create nested folder structure
   const eventFolderId = await findOrCreateFolder(eventName, ROOT_FOLDER_ID);
   const guestFolderId = await findOrCreateFolder(guestName, eventFolderId);
 
-  // Upload the file
   const { Readable } = await import("stream");
   const readable = new Readable();
   readable.push(fileBuffer);
@@ -96,7 +97,7 @@ export async function uploadFileToDrive(
     fields: "id, webViewLink, thumbnailLink",
   });
 
-  // Make file viewable by anyone with the link (for thumbnail/preview)
+  // Make file viewable by anyone with the link (so guests can preview)
   await drive.permissions.create({
     fileId: file.data.id!,
     requestBody: {
@@ -112,24 +113,15 @@ export async function uploadFileToDrive(
   };
 }
 
-/**
- * Delete a file from Google Drive
- */
 export async function deleteFileFromDrive(fileId: string): Promise<void> {
   const drive = getDriveClient();
   await drive.files.delete({ fileId });
 }
 
-/**
- * Get a direct thumbnail/preview URL for a file
- */
 export function getDriveThumbnailUrl(fileId: string): string {
   return `https://drive.google.com/thumbnail?id=${fileId}&sz=w400`;
 }
 
-/**
- * Get a direct view URL for a file
- */
 export function getDriveViewUrl(fileId: string): string {
   return `https://drive.google.com/uc?id=${fileId}`;
 }
