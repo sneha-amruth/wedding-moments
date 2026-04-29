@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { Upload } from "@/types/database";
 
 interface GallerySectionProps {
@@ -20,8 +20,29 @@ export default function GallerySection({
   uploads,
   onDelete,
 }: GallerySectionProps) {
-  const [viewingUpload, setViewingUpload] = useState<Upload | null>(null);
+  const [viewingIndex, setViewingIndex] = useState<number | null>(null);
+  const viewingUpload = viewingIndex !== null ? uploads[viewingIndex] : null;
   const [deleting, setDeleting] = useState<string | null>(null);
+  const touchStartX = useRef<number | null>(null);
+
+  const showPrev = useCallback(() => {
+    setViewingIndex((i) => (i === null ? null : (i - 1 + uploads.length) % uploads.length));
+  }, [uploads.length]);
+
+  const showNext = useCallback(() => {
+    setViewingIndex((i) => (i === null ? null : (i + 1) % uploads.length));
+  }, [uploads.length]);
+
+  useEffect(() => {
+    if (viewingIndex === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") showPrev();
+      else if (e.key === "ArrowRight") showNext();
+      else if (e.key === "Escape") setViewingIndex(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [viewingIndex, showPrev, showNext]);
 
   const handleDelete = async (uploadId: string) => {
     if (!confirm("Delete this photo? This cannot be undone.")) return;
@@ -30,7 +51,7 @@ export default function GallerySection({
     try {
       const res = await fetch(`/api/upload/${uploadId}`, { method: "DELETE" });
       if (res.ok) {
-        setViewingUpload(null);
+        setViewingIndex(null);
         onDelete();
       }
     } catch (err) {
@@ -70,10 +91,10 @@ export default function GallerySection({
     <>
       {/* Photo Grid */}
       <div className="grid grid-cols-3 gap-1.5">
-        {uploads.map((upload) => (
+        {uploads.map((upload, idx) => (
           <button
             key={upload.id}
-            onClick={() => setViewingUpload(upload)}
+            onClick={() => setViewingIndex(idx)}
             className="aspect-square rounded-lg overflow-hidden bg-neutral-100 relative group"
           >
             {upload.file_type === "video" ? (
@@ -102,12 +123,23 @@ export default function GallerySection({
       </div>
 
       {/* Lightbox / Full View */}
-      {viewingUpload && (
-        <div className="fixed inset-0 z-50 bg-black/90 flex flex-col">
+      {viewingUpload && viewingIndex !== null && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 flex flex-col"
+          onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; }}
+          onTouchEnd={(e) => {
+            if (touchStartX.current === null) return;
+            const dx = e.changedTouches[0].clientX - touchStartX.current;
+            touchStartX.current = null;
+            if (Math.abs(dx) < 50) return;
+            if (dx < 0) showNext();
+            else showPrev();
+          }}
+        >
           {/* Lightbox header */}
           <div className="flex items-center justify-between p-4">
             <button
-              onClick={() => setViewingUpload(null)}
+              onClick={() => setViewingIndex(null)}
               className="text-white/80 hover:text-white transition-colors"
             >
               <svg
@@ -124,6 +156,10 @@ export default function GallerySection({
                 />
               </svg>
             </button>
+
+            <span className="text-xs text-white/60">
+              {viewingIndex + 1} / {uploads.length}
+            </span>
 
             <div className="flex items-center gap-3">
               {/* Download */}
@@ -170,8 +206,20 @@ export default function GallerySection({
             </div>
           </div>
 
-          {/* Image/Video */}
-          <div className="flex-1 flex items-center justify-center p-4">
+          {/* Image/Video with prev/next overlay */}
+          <div className="flex-1 flex items-center justify-center p-4 relative">
+            {uploads.length > 1 && (
+              <button
+                onClick={showPrev}
+                aria-label="Previous"
+                className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+            )}
+
             {viewingUpload.file_type === "video" ? (
               <iframe
                 src={drivePreviewUrl(viewingUpload.drive_file_id)}
@@ -186,6 +234,18 @@ export default function GallerySection({
                 alt={viewingUpload.file_name}
                 className="max-w-full max-h-full object-contain rounded-lg"
               />
+            )}
+
+            {uploads.length > 1 && (
+              <button
+                onClick={showNext}
+                aria-label="Next"
+                className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
             )}
           </div>
 

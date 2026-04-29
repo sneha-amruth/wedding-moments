@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 interface Event {
   id: string;
@@ -72,7 +72,8 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<string>("all");
   const [activeTab, setActiveTab] = useState<"photos" | "guests">("photos");
-  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const touchStartX = useRef<number | null>(null);
 
   // Check for existing session
   useEffect(() => {
@@ -119,6 +120,30 @@ export default function AdminPage() {
   useEffect(() => {
     if (authenticated) fetchStats();
   }, [authenticated, fetchStats]);
+
+  // Filtered uploads (for grid + lightbox navigation) — computed at top so
+  // hooks below can reference its length without violating rules-of-hooks.
+  const filteredUploads = useMemo(() => {
+    if (!stats) return [];
+    return selectedEvent === "all"
+      ? stats.uploads
+      : stats.uploads.filter((u) => u.event_id === selectedEvent);
+  }, [stats, selectedEvent]);
+
+  useEffect(() => {
+    if (lightboxIndex === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") {
+        setLightboxIndex((i) => (i === null ? null : (i - 1 + filteredUploads.length) % filteredUploads.length));
+      } else if (e.key === "ArrowRight") {
+        setLightboxIndex((i) => (i === null ? null : (i + 1) % filteredUploads.length));
+      } else if (e.key === "Escape") {
+        setLightboxIndex(null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightboxIndex, filteredUploads.length]);
 
   const handleDelete = async (uploadId: string) => {
     if (!confirm("Delete this upload?")) return;
@@ -182,12 +207,15 @@ export default function AdminPage() {
     );
   }
 
-  // ─── Filtered uploads ───
-  const filteredUploads = selectedEvent === "all"
-    ? stats.uploads
-    : stats.uploads.filter((u) => u.event_id === selectedEvent);
-
   const guestMap = new Map(stats.guests.map((g) => [g.id, g]));
+
+  const lightboxUpload = lightboxIndex !== null ? filteredUploads[lightboxIndex] : null;
+  const showPrevLightbox = () => {
+    setLightboxIndex((i) => (i === null ? null : (i - 1 + filteredUploads.length) % filteredUploads.length));
+  };
+  const showNextLightbox = () => {
+    setLightboxIndex((i) => (i === null ? null : (i + 1) % filteredUploads.length));
+  };
 
   // ─── Dashboard ───
   return (
@@ -285,11 +313,11 @@ export default function AdminPage() {
               <p className="text-center text-sm text-neutral-400 py-8">No uploads yet</p>
             ) : (
               <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
-                {filteredUploads.map((upload) => (
+                {filteredUploads.map((upload, idx) => (
                   <div key={upload.id} className="relative group">
                     <div
                       className="aspect-square rounded-lg overflow-hidden bg-neutral-100 cursor-pointer"
-                      onClick={() => setLightboxUrl(driveImageUrl(upload.drive_file_id))}
+                      onClick={() => setLightboxIndex(idx)}
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
@@ -342,26 +370,64 @@ export default function AdminPage() {
       </div>
 
       {/* Lightbox */}
-      {lightboxUrl && (
+      {lightboxUpload && lightboxIndex !== null && (
         <div
           className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4"
-          onClick={() => setLightboxUrl(null)}
+          onClick={() => setLightboxIndex(null)}
+          onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; }}
+          onTouchEnd={(e) => {
+            if (touchStartX.current === null) return;
+            const dx = e.changedTouches[0].clientX - touchStartX.current;
+            touchStartX.current = null;
+            if (Math.abs(dx) < 50) return;
+            if (dx < 0) showNextLightbox();
+            else showPrevLightbox();
+          }}
         >
           <button
             className="absolute top-4 right-4 text-white/70 hover:text-white z-50"
-            onClick={() => setLightboxUrl(null)}
+            onClick={() => setLightboxIndex(null)}
           >
             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
+
+          <span className="absolute top-4 left-1/2 -translate-x-1/2 text-xs text-white/60">
+            {lightboxIndex + 1} / {filteredUploads.length}
+          </span>
+
+          {filteredUploads.length > 1 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); showPrevLightbox(); }}
+              aria-label="Previous"
+              className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-50 w-10 h-10 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+          )}
+
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={lightboxUrl}
-            alt="Full size"
+            src={driveImageUrl(lightboxUpload.drive_file_id)}
+            alt={lightboxUpload.file_name}
             className="max-w-full max-h-full object-contain rounded-lg"
             onClick={(e) => e.stopPropagation()}
           />
+
+          {filteredUploads.length > 1 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); showNextLightbox(); }}
+              aria-label="Next"
+              className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-50 w-10 h-10 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          )}
         </div>
       )}
     </div>
