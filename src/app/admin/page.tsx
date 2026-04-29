@@ -24,9 +24,14 @@ interface Upload {
   file_name: string;
   file_type: string;
   file_size: number;
+  drive_file_id: string;
   drive_view_url: string;
   thumbnail_url: string;
   created_at: string;
+}
+
+function driveImageUrl(fileId: string, size = 1920): string {
+  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w${size}`;
 }
 
 interface Stats {
@@ -284,11 +289,11 @@ export default function AdminPage() {
                   <div key={upload.id} className="relative group">
                     <div
                       className="aspect-square rounded-lg overflow-hidden bg-neutral-100 cursor-pointer"
-                      onClick={() => setLightboxUrl(upload.drive_view_url)}
+                      onClick={() => setLightboxUrl(driveImageUrl(upload.drive_file_id))}
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={upload.thumbnail_url}
+                        src={driveImageUrl(upload.drive_file_id, 400)}
                         alt={upload.file_name}
                         className="w-full h-full object-cover"
                       />
