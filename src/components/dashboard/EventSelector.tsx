@@ -8,6 +8,17 @@ interface EventSelectorProps {
   onSelect: (event: WeddingEvent) => void;
 }
 
+function isToday(dateStr: string | null | undefined): boolean {
+  if (!dateStr) return false;
+  const d = new Date(dateStr);
+  const today = new Date();
+  return (
+    d.getFullYear() === today.getFullYear() &&
+    d.getMonth() === today.getMonth() &&
+    d.getDate() === today.getDate()
+  );
+}
+
 export default function EventSelector({
   events,
   selectedEvent,
@@ -24,11 +35,12 @@ export default function EventSelector({
         <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1">
           {events.map((event) => {
             const isSelected = selectedEvent?.id === event.id;
+            const today = isToday(event.date);
             return (
               <button
                 key={event.id}
                 onClick={() => onSelect(event)}
-                className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200
+                className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 relative
                   ${
                     isSelected
                       ? "bg-black text-white"
@@ -36,6 +48,14 @@ export default function EventSelector({
                   }`}
               >
                 {event.name}
+                {today && (
+                  <span
+                    className={`ml-1.5 inline-block w-1.5 h-1.5 rounded-full ${
+                      isSelected ? "bg-green-300" : "bg-green-500"
+                    }`}
+                    aria-label="Today"
+                  />
+                )}
               </button>
             );
           })}

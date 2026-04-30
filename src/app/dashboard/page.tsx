@@ -34,7 +34,8 @@ export default function DashboardPage() {
     }
   }, [loading, firebaseUser, guest, router]);
 
-  // Fetch events
+  // Fetch events; default-select today's event (or closest by date) so guests
+  // uploading at the venue land on the right event automatically.
   useEffect(() => {
     if (!guest) return;
     const fetchEvents = async () => {
@@ -43,7 +44,7 @@ export default function DashboardPage() {
         const data = await res.json();
         if (data.events && data.events.length > 0) {
           setEvents(data.events);
-          setSelectedEvent(data.events[0]);
+          setSelectedEvent(pickDefaultEvent(data.events));
         }
       } catch (err) {
         console.error("Failed to fetch events:", err);
@@ -53,6 +54,34 @@ export default function DashboardPage() {
     };
     fetchEvents();
   }, [guest, weddingId]);
+
+  function pickDefaultEvent(events: WeddingEvent[]): WeddingEvent {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayMs = today.getTime();
+
+    // 1. Exact match: an event whose date is today
+    const exactMatch = events.find((e) => {
+      if (!e.date) return false;
+      const d = new Date(e.date);
+      d.setHours(0, 0, 0, 0);
+      return d.getTime() === todayMs;
+    });
+    if (exactMatch) return exactMatch;
+
+    // 2. Otherwise: the dated event closest to today (past or future)
+    const dated = events.filter((e) => e.date);
+    if (dated.length > 0) {
+      return dated.reduce((closest, e) => {
+        const cd = Math.abs(new Date(closest.date!).getTime() - todayMs);
+        const ed = Math.abs(new Date(e.date!).getTime() - todayMs);
+        return ed < cd ? e : closest;
+      });
+    }
+
+    // 3. Fallback: first event by sort_order
+    return events[0];
+  }
 
   // Fetch uploads for the guest
   const fetchUploads = useCallback(async () => {

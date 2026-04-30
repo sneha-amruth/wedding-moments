@@ -169,6 +169,19 @@ export default function AdminPage() {
     }
   };
 
+  const handleMoveToEvent = async (uploadId: string, eventId: string) => {
+    try {
+      await fetch(`/api/upload/${uploadId}/move`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event_id: eventId }),
+      });
+      fetchStats();
+    } catch (err) {
+      console.error("Move error:", err);
+    }
+  };
+
   const handleLogout = () => {
     sessionStorage.removeItem("admin_token");
     setAuthenticated(false);
@@ -348,14 +361,32 @@ export default function AdminPage() {
                       </div>
                     )}
                     {/* Overlay on hover */}
-                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex flex-col items-center justify-center gap-1 pointer-events-none group-hover:pointer-events-auto">
-                      <p className="text-white text-[10px] truncate max-w-full px-2">
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex flex-col items-center justify-center gap-1 pointer-events-none group-hover:pointer-events-auto px-2">
+                      <p className="text-white text-[10px] truncate max-w-full">
                         {guestMap.get(upload.guest_id)?.name || "Unknown"}
                       </p>
                       <p className="text-white/60 text-[10px]">{timeAgo(upload.created_at)}</p>
+                      <select
+                        value={upload.event_id}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          if (e.target.value !== upload.event_id) {
+                            handleMoveToEvent(upload.id, e.target.value);
+                          }
+                        }}
+                        className="mt-1 text-[10px] bg-white/90 text-black rounded px-1.5 py-0.5 max-w-full"
+                        title="Move to event"
+                      >
+                        {stats.events.map((ev) => (
+                          <option key={ev.id} value={ev.id}>
+                            {ev.name}
+                          </option>
+                        ))}
+                      </select>
                       <button
                         onClick={(e) => { e.stopPropagation(); handleToggleFeature(upload.id, upload.is_featured); }}
-                        className={`mt-1 text-[10px] underline ${upload.is_featured ? "text-yellow-300 hover:text-yellow-200" : "text-white/80 hover:text-white"}`}
+                        className={`text-[10px] underline ${upload.is_featured ? "text-yellow-300 hover:text-yellow-200" : "text-white/80 hover:text-white"}`}
                       >
                         {upload.is_featured ? "Unfeature" : "Feature"}
                       </button>
