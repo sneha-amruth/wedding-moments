@@ -46,6 +46,7 @@ export default function UploadSection({
   const [queue, setQueue] = useState<FileUploadStatus[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
 
@@ -97,7 +98,18 @@ export default function UploadSection({
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files || files.length === 0) return;
+    console.log("[upload] picker returned", files?.length ?? "no", "file(s)");
+
+    if (!files || files.length === 0) {
+      // Some Android browsers fire change with no files when the user
+      // hits OK without picking anything, or when content URIs fail to
+      // materialize. Surface this so the user knows to retry.
+      setInfoMessage(
+        "No photos received. Please tap and try selecting again."
+      );
+      setTimeout(() => setInfoMessage(null), 5000);
+      return;
+    }
 
     setQueue((prev) => {
       // Dedupe within the queue by name+size+lastModified — same file picked
@@ -298,14 +310,18 @@ export default function UploadSection({
         </svg>
       </button>
 
-      {/* Step 2 — file picker (locked until event picked) */}
-      <div
-        onClick={() => selectedEvent && fileInputRef.current?.click()}
-        className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-200
+      {/* Step 2 — file picker (locked until event picked).
+          The input is *inside* the label so the picker opens via the
+          native click path, not via JS `.click()`. Some Android browsers
+          drop the change event when triggered programmatically — this
+          pattern works on every browser. */}
+      <label
+        htmlFor="file-input"
+        className={`block border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-200
           ${
             selectedEvent
               ? "border-neutral-300 hover:border-black hover:bg-neutral-50 cursor-pointer"
-              : "border-neutral-200 opacity-50 cursor-not-allowed"
+              : "border-neutral-200 opacity-50 cursor-not-allowed pointer-events-none"
           }`}
       >
         <p className="text-[10px] uppercase tracking-widest text-neutral-400 mb-2">
@@ -336,20 +352,24 @@ export default function UploadSection({
             Select multiple files from your camera roll
           </p>
         )}
-      </div>
+        <input
+          id="file-input"
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,video/*"
+          multiple
+          onChange={handleFileSelect}
+          disabled={!selectedEvent}
+          className="sr-only"
+        />
+      </label>
 
-      {/* sr-only instead of `hidden` (display:none): some Android browsers
-          (Samsung Internet, MIUI, older Chrome) silently fail to deliver
-          selected files back when the input is display:none. Keeping the
-          element in layout but visually hidden avoids that bug. */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*,video/*"
-        multiple
-        onChange={handleFileSelect}
-        className="sr-only"
-      />
+      {/* Inline status message — surfaces "no files received" / similar */}
+      {infoMessage && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-900">
+          {infoMessage}
+        </div>
+      )}
 
       {/* Keep-screen-open banner during active upload. The Wake Lock
           above tries to keep the screen on automatically, but if the
