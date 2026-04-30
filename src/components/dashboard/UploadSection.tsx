@@ -318,13 +318,17 @@ export default function UploadSection({
         )}
       </div>
 
+      {/* sr-only instead of `hidden` (display:none): some Android browsers
+          (Samsung Internet, MIUI, older Chrome) silently fail to deliver
+          selected files back when the input is display:none. Keeping the
+          element in layout but visually hidden avoids that bug. */}
       <input
         ref={fileInputRef}
         type="file"
         accept="image/*,video/*"
         multiple
         onChange={handleFileSelect}
-        className="hidden"
+        className="sr-only"
       />
 
       {/* Keep-screen-open banner during active upload. The Wake Lock
