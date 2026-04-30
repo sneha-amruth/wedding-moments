@@ -311,58 +311,59 @@ export default function UploadSection({
       </button>
 
       {/* Step 2 — file picker (locked until event picked).
-          The input is *inside* the label so the picker opens via the
-          native click path, not via JS `.click()`. Some Android browsers
-          drop the change event when triggered programmatically — this
-          pattern works on every browser. */}
-      <label
-        htmlFor="file-input"
-        className={`block border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-200
+          The input is rendered *over* the styled box at full size with
+          opacity 0 — every tap on the box is an actual tap on the
+          native input, no JS click() and no label trickery. This is the
+          most cross-browser-reliable file picker pattern. */}
+      <div
+        className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-200
           ${
             selectedEvent
-              ? "border-neutral-300 hover:border-black hover:bg-neutral-50 cursor-pointer"
-              : "border-neutral-200 opacity-50 cursor-not-allowed pointer-events-none"
+              ? "border-neutral-300 hover:border-black hover:bg-neutral-50"
+              : "border-neutral-200 opacity-50"
           }`}
       >
-        <p className="text-[10px] uppercase tracking-widest text-neutral-400 mb-2">
-          Step 2 — Select photos
-        </p>
-        <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-neutral-100 flex items-center justify-center">
-          <svg
-            className="w-7 h-7 text-black"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={1.5}
-              d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z"
-            />
-          </svg>
-        </div>
-        <p className="text-sm font-medium text-black">
-          {selectedEvent
-            ? "Tap to select photos & videos"
-            : "Pick an event first"}
-        </p>
-        {selectedEvent && (
-          <p className="text-xs text-neutral-500 mt-1">
-            Select multiple files from your camera roll
+        <div className="pointer-events-none">
+          <p className="text-[10px] uppercase tracking-widest text-neutral-400 mb-2">
+            Step 2 — Select photos
           </p>
-        )}
+          <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-neutral-100 flex items-center justify-center">
+            <svg
+              className="w-7 h-7 text-black"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z"
+              />
+            </svg>
+          </div>
+          <p className="text-sm font-medium text-black">
+            {selectedEvent
+              ? "Tap to select photos & videos"
+              : "Pick an event first"}
+          </p>
+          {selectedEvent && (
+            <p className="text-xs text-neutral-500 mt-1">
+              Select multiple files from your camera roll
+            </p>
+          )}
+        </div>
         <input
-          id="file-input"
           ref={fileInputRef}
           type="file"
           accept="image/*,video/*"
           multiple
           onChange={handleFileSelect}
           disabled={!selectedEvent}
-          className="sr-only"
+          aria-label="Select photos to upload"
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed disabled:pointer-events-none"
         />
-      </label>
+      </div>
 
       {/* Inline status message — surfaces "no files received" / similar */}
       {infoMessage && (
