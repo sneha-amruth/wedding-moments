@@ -29,6 +29,7 @@ export default function UploadSection({
 }: UploadSectionProps) {
   const [queue, setQueue] = useState<FileUploadStatus[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -169,8 +170,19 @@ export default function UploadSection({
 
   return (
     <div className="space-y-5">
-      {/* No event selected warning */}
-      {!selectedEvent && (
+      {/* Selected-event banner — makes the destination obvious so guests
+          don't accidentally upload PelliKuthuru photos into Engagement. */}
+      {selectedEvent ? (
+        <div className="bg-black text-white rounded-xl p-4 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] uppercase tracking-widest text-white/50 mb-0.5">
+              Uploading to
+            </p>
+            <p className="text-base font-semibold">{selectedEvent.name}</p>
+          </div>
+          <p className="text-xs text-white/60">Tap event chip above to change</p>
+        </div>
+      ) : (
         <div className="bg-neutral-100 border border-neutral-200 rounded-xl p-4 text-sm text-neutral-600">
           Please select an event above before uploading.
         </div>
@@ -332,7 +344,7 @@ export default function UploadSection({
           {pendingCount > 0 && (
             <Button
               className="w-full"
-              onClick={handleUploadAll}
+              onClick={() => setConfirmOpen(true)}
               loading={isUploading}
               disabled={!selectedEvent}
             >
@@ -348,6 +360,55 @@ export default function UploadSection({
           Select photos and videos from your camera roll to share with Sneha
           &amp; Venkatesh.
         </p>
+      )}
+
+      {/* Confirmation modal — last-chance check the right event is picked */}
+      {confirmOpen && selectedEvent && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-4"
+          onClick={() => setConfirmOpen(false)}
+        >
+          <div
+            className="bg-white rounded-2xl p-6 w-full max-w-sm"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-black mb-1">
+              Confirm upload
+            </h3>
+            <p className="text-sm text-neutral-500 mb-4">
+              You&apos;re about to upload{" "}
+              <span className="font-semibold text-black">
+                {pendingCount} {pendingCount === 1 ? "file" : "files"}
+              </span>{" "}
+              to:
+            </p>
+            <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-4 mb-5 text-center">
+              <p className="text-[10px] uppercase tracking-widest text-neutral-400 mb-1">
+                Event
+              </p>
+              <p className="text-xl font-bold text-black">
+                {selectedEvent.name}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmOpen(false)}
+                className="flex-1 py-3 rounded-full border border-neutral-300 text-sm font-medium text-neutral-700 hover:bg-neutral-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setConfirmOpen(false);
+                  handleUploadAll();
+                }}
+                className="flex-1 py-3 rounded-full bg-black text-white text-sm font-medium hover:bg-neutral-800 transition-colors"
+              >
+                Upload
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
