@@ -486,6 +486,61 @@ export default function AdminPage() {
               </svg>
             </button>
           )}
+
+          {/* Bottom action bar — tap-to-act controls (mobile-friendly).
+              Each row keeps the click contained so taps don't close the lightbox. */}
+          <div
+            className="absolute bottom-0 left-0 right-0 bg-black/80 backdrop-blur-sm p-4 space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-center">
+              <p className="text-xs text-white/60">
+                {guestMap.get(lightboxUpload.guest_id)?.name || "Unknown"} ·{" "}
+                {timeAgo(lightboxUpload.created_at)}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-white/60 flex-shrink-0">Event</label>
+              <select
+                value={lightboxUpload.event_id}
+                onChange={(e) => {
+                  if (e.target.value !== lightboxUpload.event_id) {
+                    handleMoveToEvent(lightboxUpload.id, e.target.value);
+                  }
+                }}
+                className="flex-1 text-sm bg-white/10 text-white rounded-lg px-3 py-2 border border-white/20 focus:outline-none focus:border-white/40"
+              >
+                {stats.events.map((ev) => (
+                  <option key={ev.id} value={ev.id} className="text-black">
+                    {ev.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleToggleFeature(lightboxUpload.id, lightboxUpload.is_featured)}
+                className={`flex-1 py-2.5 rounded-full text-sm font-medium transition-colors ${
+                  lightboxUpload.is_featured
+                    ? "bg-yellow-400 text-black hover:bg-yellow-300"
+                    : "bg-white/10 text-white hover:bg-white/20 border border-white/20"
+                }`}
+              >
+                {lightboxUpload.is_featured ? "★ Featured" : "☆ Feature"}
+              </button>
+              <button
+                onClick={() => {
+                  handleDelete(lightboxUpload.id);
+                  setLightboxIndex(null);
+                }}
+                className="flex-1 py-2.5 rounded-full text-sm font-medium bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/30 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
