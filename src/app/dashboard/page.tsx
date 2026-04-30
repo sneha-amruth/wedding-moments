@@ -7,10 +7,9 @@ import LoadingScreen from "@/components/ui/LoadingScreen";
 import EventSelector from "@/components/dashboard/EventSelector";
 import UploadSection from "@/components/dashboard/UploadSection";
 import GallerySection from "@/components/dashboard/GallerySection";
-import AllPhotosSection from "@/components/dashboard/AllPhotosSection";
 import type { WeddingEvent, Upload } from "@/types/database";
 
-type Tab = "upload" | "gallery" | "all";
+type Tab = "upload" | "gallery";
 
 export default function DashboardPage() {
   const { firebaseUser, guest, loading, logout } = useAuth();
@@ -113,7 +112,7 @@ export default function DashboardPage() {
       {/* Tab Bar */}
       <div className="bg-white border-b border-neutral-200 sticky top-[52px] z-20">
         <div className="max-w-lg mx-auto flex">
-          {(["upload", "gallery", "all"] as Tab[]).map((tab) => (
+          {(["upload", "gallery"] as Tab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -124,11 +123,7 @@ export default function DashboardPage() {
                     : "text-neutral-400 hover:text-neutral-600"
                 }`}
             >
-              {tab === "upload"
-                ? "Upload"
-                : tab === "gallery"
-                ? `My Photos (${uploads.length})`
-                : "All Photos"}
+              {tab === "upload" ? "Upload" : `My Photos (${uploads.length})`}
               {activeTab === tab && (
                 <div className="absolute bottom-0 left-4 right-4 h-0.5 bg-black rounded-full" />
               )}
@@ -146,13 +141,11 @@ export default function DashboardPage() {
             weddingId={weddingId}
             onUploadComplete={fetchUploads}
           />
-        ) : activeTab === "gallery" ? (
-          <GallerySection uploads={uploads} onDelete={fetchUploads} />
         ) : (
-          <AllPhotosSection
-            selectedEvent={selectedEvent}
-            weddingId={weddingId}
+          <GallerySection
+            uploads={uploads}
             currentGuestId={guest.id}
+            onDelete={fetchUploads}
           />
         )}
       </main>

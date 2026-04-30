@@ -3,8 +3,11 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 
 /**
  * GET /api/uploads?guestId=xxx&eventId=yyy
- * GET /api/uploads?eventId=yyy&all=true  (all uploads for an event)
- * GET /api/uploads?weddingId=xxx&all=true (all uploads for entire wedding)
+ *   "My Photos" feed: photos uploaded by the guest UNION photos the guest
+ *   is face-matched in UNION featured photos. Optionally filtered by event.
+ *
+ * GET /api/uploads?weddingId=xxx&all=true (or ?eventId=&all=true)
+ *   Admin/global: every upload (used by admin dashboard).
  */
 export async function GET(request: NextRequest) {
   try {
@@ -15,55 +18,58 @@ export async function GET(request: NextRequest) {
     const all = searchParams.get("all") === "true";
 
     if (all) {
-      // Fetch all uploads for an event or entire wedding, with guest info
       let query = supabaseAdmin
         .from("uploads")
         .select("*, events(name), guests(name)")
         .eq("is_hidden", false)
         .order("created_at", { ascending: false });
 
-      if (eventId) {
-        query = query.eq("event_id", eventId);
-      } else if (weddingId) {
-        query = query.eq("wedding_id", weddingId);
-      } else {
+      if (eventId) query = query.eq("event_id", eventId);
+      else if (weddingId) query = query.eq("wedding_id", weddingId);
+      else
         return NextResponse.json(
           { error: "eventId or weddingId required for all=true" },
           { status: 400 }
         );
-      }
 
       const { data: uploads, error } = await query;
-      if (error) {
+      if (error)
         return NextResponse.json({ error: error.message }, { status: 500 });
-      }
       return NextResponse.json({ uploads });
     }
 
-    // Original: fetch uploads for a specific guest
-    if (!guestId) {
+    // Per-guest feed: own + face-matched + featured
+    if (!guestId)
       return NextResponse.json(
         { error: "guestId is required" },
         { status: 400 }
       );
-    }
 
+    // Fetch ids of photos the guest is matched in
+    const { data: matches } = await supabaseAdmin
+      .from("photo_matches")
+      .select("upload_id")
+      .eq("guest_id", guestId);
+    const matchedIds = (matches ?? []).map((m) => m.upload_id);
+
+    // Build the union: guest_id = me OR id IN matchedIds OR is_featured = true
     let query = supabaseAdmin
       .from("uploads")
-      .select("*, events(name)")
-      .eq("guest_id", guestId)
+      .select("*, events(name), guests(name)")
       .eq("is_hidden", false)
       .order("created_at", { ascending: false });
 
-    if (eventId) {
-      query = query.eq("event_id", eventId);
+    const orFilters = [`guest_id.eq.${guestId}`, `is_featured.eq.true`];
+    if (matchedIds.length > 0) {
+      orFilters.push(`id.in.(${matchedIds.join(",")})`);
     }
+    query = query.or(orFilters.join(","));
+
+    if (eventId) query = query.eq("event_id", eventId);
 
     const { data: uploads, error } = await query;
-
-    if (error) {
+    if (error)
       return NextResponse.json({ error: error.message }, { status: 500 });
-    }
 
     return NextResponse.json({ uploads });
   } catch (err) {

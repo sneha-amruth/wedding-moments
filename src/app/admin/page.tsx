@@ -27,6 +27,7 @@ interface Upload {
   drive_file_id: string;
   drive_view_url: string;
   thumbnail_url: string;
+  is_featured: boolean;
   created_at: string;
 }
 
@@ -152,6 +153,19 @@ export default function AdminPage() {
       fetchStats();
     } catch (err) {
       console.error("Delete error:", err);
+    }
+  };
+
+  const handleToggleFeature = async (uploadId: string, currentValue: boolean) => {
+    try {
+      await fetch(`/api/upload/${uploadId}/feature`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_featured: !currentValue }),
+      });
+      fetchStats();
+    } catch (err) {
+      console.error("Feature toggle error:", err);
     }
   };
 
@@ -326,6 +340,13 @@ export default function AdminPage() {
                         className="w-full h-full object-cover"
                       />
                     </div>
+                    {upload.is_featured && (
+                      <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-yellow-400 flex items-center justify-center" title="Featured">
+                        <svg className="w-3 h-3 text-black" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                        </svg>
+                      </div>
+                    )}
                     {/* Overlay on hover */}
                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex flex-col items-center justify-center gap-1 pointer-events-none group-hover:pointer-events-auto">
                       <p className="text-white text-[10px] truncate max-w-full px-2">
@@ -333,8 +354,14 @@ export default function AdminPage() {
                       </p>
                       <p className="text-white/60 text-[10px]">{timeAgo(upload.created_at)}</p>
                       <button
+                        onClick={(e) => { e.stopPropagation(); handleToggleFeature(upload.id, upload.is_featured); }}
+                        className={`mt-1 text-[10px] underline ${upload.is_featured ? "text-yellow-300 hover:text-yellow-200" : "text-white/80 hover:text-white"}`}
+                      >
+                        {upload.is_featured ? "Unfeature" : "Feature"}
+                      </button>
+                      <button
                         onClick={(e) => { e.stopPropagation(); handleDelete(upload.id); }}
-                        className="mt-1 text-red-400 hover:text-red-300 text-[10px] underline"
+                        className="text-red-400 hover:text-red-300 text-[10px] underline"
                       >
                         Delete
                       </button>

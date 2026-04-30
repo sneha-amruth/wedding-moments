@@ -100,7 +100,11 @@ export interface Upload {
   drive_view_url: string;
   thumbnail_url: string | null;
   is_hidden: boolean;
+  is_featured?: boolean;
+  face_processed_at?: string | null;
   created_at: string;
+  events?: { name: string } | null;
+  guests?: { name: string } | null;
 }
 
 export interface UploadInsert {

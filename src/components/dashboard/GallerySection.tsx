@@ -5,6 +5,7 @@ import type { Upload } from "@/types/database";
 
 interface GallerySectionProps {
   uploads: Upload[];
+  currentGuestId: string;
   onDelete: () => void;
 }
 
@@ -18,6 +19,7 @@ function drivePreviewUrl(fileId: string): string {
 
 export default function GallerySection({
   uploads,
+  currentGuestId,
   onDelete,
 }: GallerySectionProps) {
   const [viewingIndex, setViewingIndex] = useState<number | null>(null);
@@ -91,35 +93,49 @@ export default function GallerySection({
     <>
       {/* Photo Grid */}
       <div className="grid grid-cols-3 gap-1.5">
-        {uploads.map((upload, idx) => (
-          <button
-            key={upload.id}
-            onClick={() => setViewingIndex(idx)}
-            className="aspect-square rounded-lg overflow-hidden bg-neutral-100 relative group"
-          >
-            {upload.file_type === "video" ? (
-              <div className="w-full h-full flex items-center justify-center bg-gray-900">
-                <svg
-                  className="w-8 h-8 text-white/80"
-                  fill="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path d="M8 5v14l11-7z" />
-                </svg>
+        {uploads.map((upload, idx) => {
+          const isOwn = upload.guest_id === currentGuestId;
+          const uploaderName = isOwn ? "You" : upload.guests?.name || "Guest";
+          return (
+            <button
+              key={upload.id}
+              onClick={() => setViewingIndex(idx)}
+              className="aspect-square rounded-lg overflow-hidden bg-neutral-100 relative group"
+            >
+              {upload.file_type === "video" ? (
+                <div className="w-full h-full flex items-center justify-center bg-gray-900">
+                  <svg
+                    className="w-8 h-8 text-white/80"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                </div>
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={driveImageUrl(upload.drive_file_id, 400)}
+                  alt={upload.file_name}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+              )}
+
+              {upload.is_featured && (
+                <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-yellow-400 flex items-center justify-center">
+                  <svg className="w-3 h-3 text-black" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                </div>
+              )}
+
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-2 pb-1 pt-3">
+                <p className="text-[10px] text-white truncate">{uploaderName}</p>
               </div>
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={driveImageUrl(upload.drive_file_id, 400)}
-                alt={upload.file_name}
-                className="w-full h-full object-cover"
-                loading="lazy"
-              />
-            )}
-            {/* Hover overlay */}
-            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
-          </button>
-        ))}
+            </button>
+          );
+        })}
       </div>
 
       {/* Lightbox / Full View */}
@@ -183,26 +199,28 @@ export default function GallerySection({
                   />
                 </svg>
               </a>
-              {/* Delete */}
-              <button
-                onClick={() => handleDelete(viewingUpload.id)}
-                disabled={deleting === viewingUpload.id}
-                className="text-white/80 hover:text-red-400 transition-colors disabled:opacity-50"
-              >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+              {/* Delete (own photos only) */}
+              {viewingUpload.guest_id === currentGuestId && (
+                <button
+                  onClick={() => handleDelete(viewingUpload.id)}
+                  disabled={deleting === viewingUpload.id}
+                  className="text-white/80 hover:text-red-400 transition-colors disabled:opacity-50"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                  />
-                </svg>
-              </button>
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                    />
+                  </svg>
+                </button>
+              )}
             </div>
           </div>
 
@@ -249,9 +267,14 @@ export default function GallerySection({
             )}
           </div>
 
-          {/* File info */}
+          {/* Footer info */}
           <div className="p-4 text-center">
-            <p className="text-xs text-white/60">{viewingUpload.file_name}</p>
+            <p className="text-sm text-white/80">
+              {viewingUpload.guest_id === currentGuestId
+                ? "Uploaded by you"
+                : `Shared by ${viewingUpload.guests?.name || "a guest"}`}
+              {viewingUpload.is_featured && " · ★ Featured"}
+            </p>
           </div>
         </div>
       )}

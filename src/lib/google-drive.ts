@@ -118,6 +118,18 @@ export async function deleteFileFromDrive(fileId: string): Promise<void> {
   await drive.files.delete({ fileId });
 }
 
+/**
+ * Download the raw bytes of a Drive file (used for face recognition).
+ */
+export async function getDriveFileBytes(fileId: string): Promise<Buffer> {
+  const drive = getDriveClient();
+  const res = await drive.files.get(
+    { fileId, alt: "media" },
+    { responseType: "arraybuffer" }
+  );
+  return Buffer.from(res.data as ArrayBuffer);
+}
+
 export function getDriveThumbnailUrl(fileId: string): string {
   return `https://drive.google.com/thumbnail?id=${fileId}&sz=w400`;
 }
