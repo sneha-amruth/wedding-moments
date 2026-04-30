@@ -1,9 +1,15 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import imageCompression from "browser-image-compression";
 import Button from "@/components/ui/Button";
 import type { Guest, WeddingEvent } from "@/types/database";
+
+// Minimal Wake Lock typing — this API isn't in older lib.dom.d.ts.
+type WakeLockSentinel = { release: () => Promise<void> };
+type NavigatorWithWakeLock = Navigator & {
+  wakeLock?: { request: (type: "screen") => Promise<WakeLockSentinel> };
+};
 
 interface UploadSectionProps {
   guest: Guest;
@@ -41,6 +47,53 @@ export default function UploadSection({
   const [isUploading, setIsUploading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+
+  // Hold a screen Wake Lock for the duration of an upload so iOS Safari
+  // / Chrome don't auto-dim and suspend the tab. Re-acquires on tab
+  // visibility change too.
+  useEffect(() => {
+    const nav = navigator as NavigatorWithWakeLock;
+    if (!nav.wakeLock) return;
+
+    let cancelled = false;
+
+    const acquire = async () => {
+      try {
+        wakeLockRef.current = await nav.wakeLock!.request("screen");
+      } catch {
+        // user denied / unsupported / power saver — non-fatal
+      }
+    };
+
+    const release = async () => {
+      try {
+        await wakeLockRef.current?.release();
+      } catch {
+        /* ignore */
+      }
+      wakeLockRef.current = null;
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible" && isUploading && !cancelled) {
+        void acquire();
+      }
+    };
+
+    if (isUploading) {
+      void acquire();
+      document.addEventListener("visibilitychange", onVisibilityChange);
+    } else {
+      void release();
+    }
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      void release();
+    };
+  }, [isUploading]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -285,14 +338,48 @@ export default function UploadSection({
         )}
       </div>
 
+      {/* sr-only instead of `hidden` (display:none): some Android browsers
+          (Samsung Internet, MIUI, older Chrome) silently fail to deliver
+          selected files back when the input is display:none. Keeping the
+          element in layout but visually hidden avoids that bug. */}
       <input
         ref={fileInputRef}
         type="file"
         accept="image/*,video/*"
         multiple
         onChange={handleFileSelect}
-        className="hidden"
+        className="sr-only"
       />
+
+      {/* Keep-screen-open banner during active upload. The Wake Lock
+          above tries to keep the screen on automatically, but if the
+          user manually locks the phone or the OS denies the lock, the
+          tab will suspend — this banner sets expectations. */}
+      {isUploading && (
+        <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 flex items-start gap-3">
+          <svg
+            className="w-5 h-5 text-amber-700 flex-shrink-0 mt-0.5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+          <div>
+            <p className="text-sm font-medium text-amber-900">
+              Keep this screen open
+            </p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              Don&apos;t lock your phone or switch apps until uploading is done.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Upload queue */}
       {queue.length > 0 && (
