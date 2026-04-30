@@ -7,9 +7,15 @@ import type { Guest, WeddingEvent } from "@/types/database";
 
 interface UploadSectionProps {
   guest: Guest;
-  selectedEvent: WeddingEvent | null;
+  events: WeddingEvent[];
   weddingId: string;
   onUploadComplete: () => void;
+}
+
+function formatEventDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 interface FileUploadStatus {
@@ -23,10 +29,14 @@ interface FileUploadStatus {
 
 export default function UploadSection({
   guest,
-  selectedEvent,
+  events,
   weddingId,
   onUploadComplete,
 }: UploadSectionProps) {
+  // No default — guests must explicitly choose. This is positive friction:
+  // forces a deliberate decision so photos don't end up in the wrong event.
+  const [selectedEvent, setSelectedEvent] = useState<WeddingEvent | null>(null);
+  const [eventPickerOpen, setEventPickerOpen] = useState(false);
   const [queue, setQueue] = useState<FileUploadStatus[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -170,34 +180,64 @@ export default function UploadSection({
 
   return (
     <div className="space-y-5">
-      {/* Selected-event banner — makes the destination obvious so guests
-          don't accidentally upload PelliKuthuru photos into Engagement. */}
-      {selectedEvent ? (
-        <div className="bg-black text-white rounded-xl p-4 flex items-center justify-between">
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-white/50 mb-0.5">
-              Uploading to
-            </p>
-            <p className="text-base font-semibold">{selectedEvent.name}</p>
-          </div>
-          <p className="text-xs text-white/60">Tap event chip above to change</p>
-        </div>
-      ) : (
-        <div className="bg-neutral-100 border border-neutral-200 rounded-xl p-4 text-sm text-neutral-600">
-          Please select an event above before uploading.
-        </div>
-      )}
-
-      {/* Upload area */}
-      <div
-        onClick={() => selectedEvent && fileInputRef.current?.click()}
-        className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-200 cursor-pointer
+      {/* Step 1 — pick the event. No default; tapping is required before
+          the file picker activates. */}
+      <button
+        type="button"
+        onClick={() => setEventPickerOpen(true)}
+        className={`w-full rounded-xl p-4 text-left transition-colors flex items-center justify-between
           ${
             selectedEvent
-              ? "border-neutral-300 hover:border-black hover:bg-neutral-50"
+              ? "bg-black text-white"
+              : "bg-amber-50 border border-amber-300 hover:bg-amber-100"
+          }`}
+      >
+        <div>
+          <p
+            className={`text-[10px] uppercase tracking-widest mb-0.5 ${
+              selectedEvent ? "text-white/50" : "text-amber-700"
+            }`}
+          >
+            Step 1 — Which event?
+          </p>
+          <p
+            className={`text-base font-semibold ${
+              selectedEvent ? "text-white" : "text-amber-900"
+            }`}
+          >
+            {selectedEvent ? selectedEvent.name : "Tap to pick an event"}
+          </p>
+        </div>
+        <svg
+          className={`w-5 h-5 ${
+            selectedEvent ? "text-white/60" : "text-amber-700"
+          }`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M19 9l-7 7-7-7"
+          />
+        </svg>
+      </button>
+
+      {/* Step 2 — file picker (locked until event picked) */}
+      <div
+        onClick={() => selectedEvent && fileInputRef.current?.click()}
+        className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-200
+          ${
+            selectedEvent
+              ? "border-neutral-300 hover:border-black hover:bg-neutral-50 cursor-pointer"
               : "border-neutral-200 opacity-50 cursor-not-allowed"
           }`}
       >
+        <p className="text-[10px] uppercase tracking-widest text-neutral-400 mb-2">
+          Step 2 — Select photos
+        </p>
         <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-neutral-100 flex items-center justify-center">
           <svg
             className="w-7 h-7 text-black"
@@ -214,11 +254,15 @@ export default function UploadSection({
           </svg>
         </div>
         <p className="text-sm font-medium text-black">
-          Tap to select photos &amp; videos
+          {selectedEvent
+            ? "Tap to select photos & videos"
+            : "Pick an event first"}
         </p>
-        <p className="text-xs text-neutral-500 mt-1">
-          Select multiple files from your camera roll
-        </p>
+        {selectedEvent && (
+          <p className="text-xs text-neutral-500 mt-1">
+            Select multiple files from your camera roll
+          </p>
+        )}
       </div>
 
       <input
@@ -360,6 +404,57 @@ export default function UploadSection({
           Select photos and videos from your camera roll to share with Sneha
           &amp; Venkatesh.
         </p>
+      )}
+
+      {/* Event picker modal */}
+      {eventPickerOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-4"
+          onClick={() => setEventPickerOpen(false)}
+        >
+          <div
+            className="bg-white rounded-2xl p-4 w-full max-w-sm max-h-[80vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-2 pb-3 border-b border-neutral-200 mb-2">
+              <h3 className="text-base font-bold text-black">Pick the event</h3>
+              <p className="text-xs text-neutral-500 mt-0.5">
+                Which event are these photos from?
+              </p>
+            </div>
+            <div className="space-y-1">
+              {events.map((ev) => {
+                const isSelected = selectedEvent?.id === ev.id;
+                return (
+                  <button
+                    key={ev.id}
+                    onClick={() => {
+                      setSelectedEvent(ev);
+                      setEventPickerOpen(false);
+                    }}
+                    className={`w-full text-left px-4 py-3 rounded-xl flex items-center justify-between transition-colors
+                      ${
+                        isSelected
+                          ? "bg-black text-white"
+                          : "hover:bg-neutral-100"
+                      }`}
+                  >
+                    <span className="font-medium">{ev.name}</span>
+                    {ev.date && (
+                      <span
+                        className={`text-xs ${
+                          isSelected ? "text-white/60" : "text-neutral-400"
+                        }`}
+                      >
+                        {formatEventDate(ev.date)}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Confirmation modal — last-chance check the right event is picked */}

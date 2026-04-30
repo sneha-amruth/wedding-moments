@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
-import type { Upload } from "@/types/database";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import type { Upload, WeddingEvent } from "@/types/database";
 
 interface GallerySectionProps {
   uploads: Upload[];
+  events: WeddingEvent[];
   currentGuestId: string;
   onDelete: () => void;
 }
@@ -17,8 +18,15 @@ function drivePreviewUrl(fileId: string): string {
   return `https://drive.google.com/file/d/${fileId}/preview`;
 }
 
+function formatEventDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 export default function GallerySection({
   uploads,
+  events,
   currentGuestId,
   onDelete,
 }: GallerySectionProps) {
@@ -89,51 +97,98 @@ export default function GallerySection({
     );
   }
 
+  // Group uploads by event, preserving the flat order for the lightbox so
+  // prev/next still navigates through everything chronologically.
+  const grouped = useMemo(() => {
+    const eventOrder = new Map(events.map((e, i) => [e.id, i]));
+    const groups = new Map<string, Upload[]>();
+    for (const u of uploads) {
+      const list = groups.get(u.event_id) ?? [];
+      list.push(u);
+      groups.set(u.event_id, list);
+    }
+    return Array.from(groups.entries())
+      .sort(([a], [b]) => (eventOrder.get(a) ?? 99) - (eventOrder.get(b) ?? 99))
+      .map(([eventId, items]) => ({
+        event: events.find((e) => e.id === eventId),
+        items,
+      }));
+  }, [uploads, events]);
+
   return (
     <>
-      {/* Photo Grid */}
-      <div className="grid grid-cols-3 gap-1.5">
-        {uploads.map((upload, idx) => {
-          const isOwn = upload.guest_id === currentGuestId;
-          const uploaderName = isOwn ? "You" : upload.guests?.name || "Guest";
+      {/* Photo grid grouped by event with section headers */}
+      <div className="space-y-6">
+        {grouped.map(({ event, items }) => {
+          const eventName = event?.name ?? items[0]?.events?.name ?? "Other";
           return (
-            <button
-              key={upload.id}
-              onClick={() => setViewingIndex(idx)}
-              className="aspect-square rounded-lg overflow-hidden bg-neutral-100 relative group"
-            >
-              {upload.file_type === "video" ? (
-                <div className="w-full h-full flex items-center justify-center bg-gray-900">
-                  <svg
-                    className="w-8 h-8 text-white/80"
-                    fill="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path d="M8 5v14l11-7z" />
-                  </svg>
-                </div>
-              ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={driveImageUrl(upload.drive_file_id, 400)}
-                  alt={upload.file_name}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                />
-              )}
-
-              {upload.is_featured && (
-                <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-yellow-400 flex items-center justify-center">
-                  <svg className="w-3 h-3 text-black" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                  </svg>
-                </div>
-              )}
-
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-2 pb-1 pt-3">
-                <p className="text-[10px] text-white truncate">{uploaderName}</p>
+            <section key={event?.id ?? eventName}>
+              <div className="flex items-baseline gap-2 mb-2">
+                <h3 className="text-sm font-semibold text-black">{eventName}</h3>
+                {event?.date && (
+                  <p className="text-xs text-neutral-400">
+                    {formatEventDate(event.date)}
+                  </p>
+                )}
+                <p className="text-xs text-neutral-400 ml-auto">
+                  {items.length} {items.length === 1 ? "photo" : "photos"}
+                </p>
               </div>
-            </button>
+              <div className="grid grid-cols-3 gap-1.5">
+                {items.map((upload) => {
+                  const flatIdx = uploads.indexOf(upload);
+                  const isOwn = upload.guest_id === currentGuestId;
+                  const uploaderName = isOwn
+                    ? "You"
+                    : upload.guests?.name || "Guest";
+                  return (
+                    <button
+                      key={upload.id}
+                      onClick={() => setViewingIndex(flatIdx)}
+                      className="aspect-square rounded-lg overflow-hidden bg-neutral-100 relative group"
+                    >
+                      {upload.file_type === "video" ? (
+                        <div className="w-full h-full flex items-center justify-center bg-gray-900">
+                          <svg
+                            className="w-8 h-8 text-white/80"
+                            fill="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path d="M8 5v14l11-7z" />
+                          </svg>
+                        </div>
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={driveImageUrl(upload.drive_file_id, 400)}
+                          alt={upload.file_name}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      )}
+
+                      {upload.is_featured && (
+                        <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-yellow-400 flex items-center justify-center">
+                          <svg
+                            className="w-3 h-3 text-black"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                          </svg>
+                        </div>
+                      )}
+
+                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-2 pb-1 pt-3">
+                        <p className="text-[10px] text-white truncate">
+                          {uploaderName}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
           );
         })}
       </div>
