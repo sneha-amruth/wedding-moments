@@ -46,6 +46,7 @@ export default function UploadSection({
   const [queue, setQueue] = useState<FileUploadStatus[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
 
@@ -96,9 +97,13 @@ export default function UploadSection({
   }, [isUploading]);
 
   const ingestFiles = (files: FileList | null) => {
-    // Empty-file events are common spurious noise on some browsers
-    // (e.g. fired by an empty change event right after a successful pick).
-    if (!files || files.length === 0) return;
+    if (!files || files.length === 0) {
+      setInfoMessage(
+        "No photos received. Please tap and try selecting again."
+      );
+      setTimeout(() => setInfoMessage(null), 5000);
+      return;
+    }
 
     // Build items + create preview URLs OUTSIDE setQueue's updater so a
     // throw from URL.createObjectURL doesn't silently roll back the
@@ -391,6 +396,13 @@ export default function UploadSection({
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed disabled:pointer-events-none"
         />
       </div>
+
+      {/* Inline status message — surfaces "no files received" / similar */}
+      {infoMessage && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-900">
+          {infoMessage}
+        </div>
+      )}
 
       {/* Keep-screen-open banner during active upload. The Wake Lock
           above tries to keep the screen on automatically, but if the
