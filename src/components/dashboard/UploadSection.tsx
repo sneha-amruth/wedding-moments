@@ -106,40 +106,49 @@ export default function UploadSection({
     addDebug(`${source}: ${files?.length ?? "no"} file(s)`);
     console.log("[upload]", source, files?.length ?? "no", "file(s)");
 
-    if (!files || files.length === 0) {
-      setInfoMessage(
-        "No photos received. Please tap and try selecting again."
-      );
-      setTimeout(() => setInfoMessage(null), 5000);
-      return;
+    // Empty-file events are common spurious noise (e.g. fired right after we
+    // clear the input value). Just ignore them — never show an error.
+    if (!files || files.length === 0) return;
+
+    // Snapshot file metadata + create preview URLs OUTSIDE the setQueue
+    // updater so any throw from URL.createObjectURL or property access
+    // doesn't roll back the state update silently.
+    const fileArray = Array.from(files);
+    const newItems: FileUploadStatus[] = [];
+    for (const file of fileArray) {
+      let previewUrl: string | undefined;
+      if (file.type?.startsWith("image/")) {
+        try {
+          previewUrl = URL.createObjectURL(file);
+        } catch (e) {
+          addDebug(`createObjectURL failed: ${e}`);
+        }
+      }
+      newItems.push({
+        file,
+        name: file.name || "photo",
+        progress: 0,
+        status: "pending" as const,
+        previewUrl,
+      });
     }
+    addDebug(`prepared ${newItems.length} item(s)`);
 
     setQueue((prev) => {
-      // Dedupe within the queue by name+size+lastModified — same file picked
-      // twice in one session is a common mistake. Server-side hash catches
-      // anything this misses, including across-session duplicates.
       const seen = new Set(
         prev.map((q) => `${q.file.name}::${q.file.size}::${q.file.lastModified}`)
       );
-      const newItems: FileUploadStatus[] = [];
-      for (const file of Array.from(files)) {
-        const key = `${file.name}::${file.size}::${file.lastModified}`;
-        if (seen.has(key)) continue;
+      const filtered = newItems.filter((item) => {
+        const key = `${item.file.name}::${item.file.size}::${item.file.lastModified}`;
+        if (seen.has(key)) return false;
         seen.add(key);
-        newItems.push({
-          file,
-          name: file.name,
-          progress: 0,
-          status: "pending" as const,
-          previewUrl: file.type.startsWith("image/")
-            ? URL.createObjectURL(file)
-            : undefined,
-        });
-      }
-      return [...prev, ...newItems];
+        return true;
+      });
+      return [...prev, ...filtered];
     });
-    // Reset the input so the same file can be re-selected later
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    // Don't clear input.value — clearing fires another spurious change
+    // event with 0 files which used to flash a "no photos received"
+    // banner. The dedup logic handles same-file re-selection just fine.
   };
 
   // Attach a NATIVE change/input listener to bypass React's synthetic event
