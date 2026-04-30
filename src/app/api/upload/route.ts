@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHash } from "crypto";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import {
   uploadFileToDrive,
@@ -9,7 +10,8 @@ import { findGuestsInPhoto } from "@/lib/rekognition";
 /**
  * POST /api/upload
  * Upload a file to Google Drive and record it in the uploads table.
- * For photos, also runs face recognition and writes matches to photo_matches.
+ * Skips if the same guest has already uploaded a file with identical
+ * bytes (content_hash match).
  * FormData: file, weddingId, eventId, guestId, eventName, guestName
  */
 export async function POST(request: NextRequest) {
@@ -42,6 +44,20 @@ export async function POST(request: NextRequest) {
 
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+    const contentHash = createHash("sha256").update(buffer).digest("hex");
+
+    // Dedup: if this guest already uploaded the same bytes, return the
+    // existing row instead of double-uploading to Drive.
+    const { data: existing } = await supabaseAdmin
+      .from("uploads")
+      .select("*")
+      .eq("guest_id", guestId)
+      .eq("content_hash", contentHash)
+      .maybeSingle();
+
+    if (existing) {
+      return NextResponse.json({ upload: existing, duplicate: true });
+    }
 
     const { fileId, webViewLink, thumbnailLink } = await uploadFileToDrive(
       buffer,
@@ -64,6 +80,7 @@ export async function POST(request: NextRequest) {
         drive_file_id: fileId,
         drive_view_url: webViewLink,
         thumbnail_url: thumbnailLink || getDriveThumbnailUrl(fileId),
+        content_hash: contentHash,
       })
       .select()
       .single();
@@ -72,8 +89,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Face matching (photos only). Failures are non-fatal — the upload
-    // still succeeds; the photo just won't be tagged with anyone.
+    // Face matching (photos only). Non-fatal.
     if (!isVideo) {
       try {
         const matches = await findGuestsInPhoto(buffer);
