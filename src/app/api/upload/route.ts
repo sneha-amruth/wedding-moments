@@ -4,10 +4,12 @@ import {
   uploadFileToDrive,
   getDriveThumbnailUrl,
 } from "@/lib/google-drive";
+import { findGuestsInPhoto } from "@/lib/rekognition";
 
 /**
  * POST /api/upload
- * Upload a file to Google Drive and record it in the uploads table
+ * Upload a file to Google Drive and record it in the uploads table.
+ * For photos, also runs face recognition and writes matches to photo_matches.
  * FormData: file, weddingId, eventId, guestId, eventName, guestName
  */
 export async function POST(request: NextRequest) {
@@ -68,6 +70,29 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // Face matching (photos only). Failures are non-fatal — the upload
+    // still succeeds; the photo just won't be tagged with anyone.
+    if (!isVideo) {
+      try {
+        const matches = await findGuestsInPhoto(buffer);
+        if (matches.length > 0) {
+          await supabaseAdmin.from("photo_matches").insert(
+            matches.map((m) => ({
+              upload_id: upload.id,
+              guest_id: m.guestId,
+              similarity: m.similarity,
+            }))
+          );
+        }
+        await supabaseAdmin
+          .from("uploads")
+          .update({ face_processed_at: new Date().toISOString() })
+          .eq("id", upload.id);
+      } catch (faceErr) {
+        console.error("Face match error (non-fatal):", faceErr);
+      }
     }
 
     return NextResponse.json({ upload });

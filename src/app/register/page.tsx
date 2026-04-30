@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import Button from "@/components/ui/Button";
@@ -14,8 +14,11 @@ export default function RegisterPage() {
 
   const [name, setName] = useState("");
   const [faceConsent, setFaceConsent] = useState(true);
+  const [selfie, setSelfie] = useState<File | null>(null);
+  const [selfiePreview, setSelfiePreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const weddingId = process.env.NEXT_PUBLIC_WEDDING_ID!;
 
@@ -29,25 +32,44 @@ export default function RegisterPage() {
     }
   }, [loading, firebaseUser, guest, router]);
 
+  useEffect(() => {
+    return () => {
+      if (selfiePreview) URL.revokeObjectURL(selfiePreview);
+    };
+  }, [selfiePreview]);
+
+  const handleSelfieChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (selfiePreview) URL.revokeObjectURL(selfiePreview);
+    setSelfie(file);
+    setSelfiePreview(URL.createObjectURL(file));
+  };
+
   const handleRegister = async () => {
     setError("");
     if (!name.trim()) {
       setError("Please enter your name.");
       return;
     }
+    if (faceConsent && !selfie) {
+      setError("Please add a selfie so we can find photos of you.");
+      return;
+    }
 
     setSubmitting(true);
     try {
+      const fd = new FormData();
+      fd.append("weddingId", weddingId);
+      fd.append("phone", firebaseUser!.phoneNumber || "");
+      fd.append("name", name.trim());
+      fd.append("firebaseUid", firebaseUser!.uid);
+      fd.append("faceConsent", String(faceConsent));
+      if (selfie) fd.append("selfie", selfie);
+
       const res = await fetch("/api/guest/register", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          weddingId,
-          phone: firebaseUser!.phoneNumber,
-          name: name.trim(),
-          firebaseUid: firebaseUser!.uid,
-          faceConsent,
-        }),
+        body: fd,
       });
 
       const data = await res.json();
@@ -70,7 +92,6 @@ export default function RegisterPage() {
 
   return (
     <main className="min-h-screen flex flex-col relative overflow-hidden bg-black">
-      {/* Background image — blurred */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="/bg_image.jpg"
@@ -79,9 +100,7 @@ export default function RegisterPage() {
       />
       <div className="absolute inset-0 bg-black/60" />
 
-      {/* Content */}
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 py-12">
-        {/* Couple names header */}
         <p className="font-serif-display text-white/60 text-lg mb-8">
           Sneha &amp; Venkatesh
         </p>
@@ -120,8 +139,8 @@ export default function RegisterPage() {
               autoFocus
             />
 
-            {/* Face recognition consent */}
-            <div className="bg-neutral-50 rounded-xl p-4 border border-neutral-200">
+            {/* Face consent + selfie */}
+            <div className="bg-neutral-50 rounded-xl p-4 border border-neutral-200 space-y-3">
               <label className="flex items-start gap-3 cursor-pointer">
                 <input
                   type="checkbox"
@@ -134,11 +153,54 @@ export default function RegisterPage() {
                     Find photos of me
                   </p>
                   <p className="text-xs text-neutral-500 mt-0.5">
-                    Allow face recognition to discover photos of you taken by
-                    other guests. You can opt out anytime.
+                    Add a selfie so we can show you photos others took of you.
                   </p>
                 </div>
               </label>
+
+              {faceConsent && (
+                <div className="flex items-center gap-3 pt-2 border-t border-neutral-200">
+                  {selfiePreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={selfiePreview}
+                      alt="Your selfie"
+                      className="w-16 h-16 rounded-full object-cover border border-neutral-200"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded-full bg-neutral-200 flex items-center justify-center">
+                      <svg
+                        className="w-7 h-7 text-neutral-400"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={1.5}
+                          d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"
+                        />
+                      </svg>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex-1 text-sm font-medium text-black underline underline-offset-2 hover:opacity-70 text-left"
+                  >
+                    {selfie ? "Retake selfie" : "Take a selfie"}
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="user"
+                    onChange={handleSelfieChange}
+                    className="hidden"
+                  />
+                </div>
+              )}
             </div>
 
             <Button
