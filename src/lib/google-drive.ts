@@ -130,6 +130,31 @@ export async function getDriveFileBytes(fileId: string): Promise<Buffer> {
   return Buffer.from(res.data as ArrayBuffer);
 }
 
+/**
+ * Move a Drive file from its current folder(s) to a new
+ * `{eventName}/{guestName}/` folder under ROOT_FOLDER_ID. Used by the
+ * admin "move to event" flow so Drive's folder layout stays in sync
+ * with the canonical event_id in the database.
+ */
+export async function moveDriveFileToEventGuest(
+  fileId: string,
+  eventName: string,
+  guestName: string
+): Promise<void> {
+  const drive = getDriveClient();
+  const eventFolderId = await findOrCreateFolder(eventName, ROOT_FOLDER_ID);
+  const guestFolderId = await findOrCreateFolder(guestName, eventFolderId);
+
+  const meta = await drive.files.get({ fileId, fields: "parents" });
+  const currentParents = (meta.data.parents ?? []).join(",");
+
+  await drive.files.update({
+    fileId,
+    addParents: guestFolderId,
+    removeParents: currentParents || undefined,
+  });
+}
+
 export function getDriveThumbnailUrl(fileId: string): string {
   return `https://drive.google.com/thumbnail?id=${fileId}&sz=w400`;
 }
