@@ -172,3 +172,17 @@ export async function findGuestsInPhoto(
     similarity,
   }));
 }
+
+/**
+ * Search a single image for a specific guest's face. Used by the
+ * post-register scan to retroactively match a guest into existing photos.
+ * Returns the best similarity score for that guest, or null if no match.
+ */
+export async function findGuestInPhoto(
+  imageBytes: Buffer,
+  guestId: string
+): Promise<number | null> {
+  const all = await findGuestsInPhoto(imageBytes);
+  const m = all.find((x) => x.guestId === guestId);
+  return m ? m.similarity : null;
+}

@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { waitUntil } from "@vercel/functions";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { indexGuestFace, deleteFace } from "@/lib/rekognition";
+import { scanPhotosForGuest } from "@/lib/scan-photos";
+
+export const maxDuration = 60;
 
 /**
  * POST /api/guest/register
@@ -109,7 +113,11 @@ export async function POST(request: NextRequest) {
       isNew = true;
     }
 
-    // Index selfie if provided + guest opted in
+    // Index selfie if provided + guest opted in.
+    // After indexing, kick off a background scan of existing photos so the
+    // guest sees themselves in pre-existing uploads without waiting on a
+    // periodic backfill. waitUntil keeps the function alive after the
+    // response is sent (subject to maxDuration).
     if (selfieBytes && faceConsent) {
       try {
         const faceId = await indexGuestFace(selfieBytes, guestId);
@@ -118,6 +126,11 @@ export async function POST(request: NextRequest) {
             .from("guests")
             .update({ selfie_face_id: faceId })
             .eq("id", guestId);
+          waitUntil(
+            scanPhotosForGuest(guestId).catch((e) =>
+              console.error("Background scan failed:", e)
+            )
+          );
         }
       } catch (e) {
         console.error("Failed to index selfie (continuing):", e);
