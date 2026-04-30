@@ -47,7 +47,13 @@ export default function UploadSection({
   const [isUploading, setIsUploading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const [debugLog, setDebugLog] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const addDebug = (msg: string) => {
+    const stamp = new Date().toLocaleTimeString();
+    setDebugLog((prev) => [`${stamp} — ${msg}`, ...prev].slice(0, 8));
+  };
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
 
   // Hold a screen Wake Lock for the duration of an upload so iOS Safari
@@ -96,14 +102,11 @@ export default function UploadSection({
     };
   }, [isUploading]);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    console.log("[upload] picker returned", files?.length ?? "no", "file(s)");
+  const ingestFiles = (files: FileList | null, source: string) => {
+    addDebug(`${source}: ${files?.length ?? "no"} file(s)`);
+    console.log("[upload]", source, files?.length ?? "no", "file(s)");
 
     if (!files || files.length === 0) {
-      // Some Android browsers fire change with no files when the user
-      // hits OK without picking anything, or when content URIs fail to
-      // materialize. Surface this so the user knows to retry.
       setInfoMessage(
         "No photos received. Please tap and try selecting again."
       );
@@ -135,9 +138,35 @@ export default function UploadSection({
       }
       return [...prev, ...newItems];
     });
-    // Reset input so the same files can be selected again
-    e.target.value = "";
+    // Reset the input so the same file can be re-selected later
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
+
+  // Attach a NATIVE change/input listener to bypass React's synthetic event
+  // delegation entirely. On some Android browsers (Nothing OS, Samsung,
+  // older Chrome) React's onChange is unreliable for file inputs.
+  useEffect(() => {
+    const input = fileInputRef.current;
+    if (!input) return;
+
+    const onChange = (e: Event) => {
+      const target = e.target as HTMLInputElement;
+      ingestFiles(target.files, "native change");
+    };
+    const onInput = (e: Event) => {
+      const target = e.target as HTMLInputElement;
+      ingestFiles(target.files, "native input");
+    };
+
+    input.addEventListener("change", onChange);
+    input.addEventListener("input", onInput);
+    addDebug("listeners attached");
+    return () => {
+      input.removeEventListener("change", onChange);
+      input.removeEventListener("input", onInput);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const compressImage = async (file: File): Promise<File> => {
     if (!file.type.startsWith("image/")) return file;
@@ -358,12 +387,27 @@ export default function UploadSection({
           type="file"
           accept="image/*,video/*"
           multiple
-          onChange={handleFileSelect}
+          onChange={(e) => ingestFiles(e.target.files, "react onChange")}
+          onClick={() => addDebug("input clicked")}
           disabled={!selectedEvent}
           aria-label="Select photos to upload"
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed disabled:pointer-events-none"
         />
       </div>
+
+      {/* On-screen debug log — TEMPORARY while diagnosing the file
+          picker bug on certain Android phones. Shows the most recent
+          input/change events so we can see what's actually firing. */}
+      {debugLog.length > 0 && (
+        <div className="bg-neutral-100 border border-neutral-200 rounded-xl p-3 text-[11px] text-neutral-600 font-mono space-y-0.5">
+          <p className="text-[10px] uppercase tracking-widest text-neutral-400 mb-1">
+            Debug
+          </p>
+          {debugLog.map((line, i) => (
+            <div key={i}>{line}</div>
+          ))}
+        </div>
+      )}
 
       {/* Inline status message — surfaces "no files received" / similar */}
       {infoMessage && (
