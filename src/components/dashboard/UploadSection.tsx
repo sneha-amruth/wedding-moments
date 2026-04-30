@@ -46,17 +46,30 @@ export default function UploadSection({
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    const newItems: FileUploadStatus[] = Array.from(files).map((file) => ({
-      file,
-      name: file.name,
-      progress: 0,
-      status: "pending" as const,
-      previewUrl: file.type.startsWith("image/")
-        ? URL.createObjectURL(file)
-        : undefined,
-    }));
-
-    setQueue((prev) => [...prev, ...newItems]);
+    setQueue((prev) => {
+      // Dedupe within the queue by name+size+lastModified — same file picked
+      // twice in one session is a common mistake. Server-side hash catches
+      // anything this misses, including across-session duplicates.
+      const seen = new Set(
+        prev.map((q) => `${q.file.name}::${q.file.size}::${q.file.lastModified}`)
+      );
+      const newItems: FileUploadStatus[] = [];
+      for (const file of Array.from(files)) {
+        const key = `${file.name}::${file.size}::${file.lastModified}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        newItems.push({
+          file,
+          name: file.name,
+          progress: 0,
+          status: "pending" as const,
+          previewUrl: file.type.startsWith("image/")
+            ? URL.createObjectURL(file)
+            : undefined,
+        });
+      }
+      return [...prev, ...newItems];
+    });
     // Reset input so the same files can be selected again
     e.target.value = "";
   };
@@ -118,9 +131,16 @@ export default function UploadSection({
         throw new Error(data.error || "Upload failed");
       }
 
+      const data = await res.json();
       setQueue((prev) => {
         const copy = [...prev];
-        copy[index] = { ...copy[index], status: "done", progress: 100 };
+        copy[index] = {
+          ...copy[index],
+          status: "done",
+          progress: 100,
+          // Surface server-side dedup so the user knows it wasn't re-uploaded
+          error: data.duplicate ? "Already uploaded — skipped" : undefined,
+        };
         return copy;
       });
     } catch (err) {
@@ -351,7 +371,9 @@ export default function UploadSection({
                       </div>
                     )}
                     {item.status === "done" && (
-                      <span className="text-xs text-green-600">Uploaded!</span>
+                      <span className="text-xs text-green-600">
+                        {item.error || "Uploaded!"}
+                      </span>
                     )}
                     {item.status === "error" && (
                       <span className="text-xs text-red-500">{item.error}</span>

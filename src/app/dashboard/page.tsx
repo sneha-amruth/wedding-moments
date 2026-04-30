@@ -114,22 +114,25 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Both tabs stay mounted so upload state survives switching to
+          My Photos mid-upload. Inactive tab is hidden, not unmounted. */}
       <main className="flex-1 max-w-lg mx-auto w-full px-4 py-5">
-        {activeTab === "upload" ? (
+        <div className={activeTab === "upload" ? "" : "hidden"}>
           <UploadSection
             guest={guest}
             events={events}
             weddingId={weddingId}
             onUploadComplete={fetchUploads}
           />
-        ) : (
+        </div>
+        <div className={activeTab === "gallery" ? "" : "hidden"}>
           <GallerySection
             uploads={uploads}
             events={events}
             currentGuestId={guest.id}
             onDelete={fetchUploads}
           />
-        )}
+        </div>
       </main>
     </div>
   );
