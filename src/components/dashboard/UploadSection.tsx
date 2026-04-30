@@ -47,13 +47,7 @@ export default function UploadSection({
   const [isUploading, setIsUploading] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
-  const [debugLog, setDebugLog] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const addDebug = (msg: string) => {
-    const stamp = new Date().toLocaleTimeString();
-    setDebugLog((prev) => [`${stamp} — ${msg}`, ...prev].slice(0, 8));
-  };
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
 
   // Hold a screen Wake Lock for the duration of an upload so iOS Safari
@@ -102,17 +96,18 @@ export default function UploadSection({
     };
   }, [isUploading]);
 
-  const ingestFiles = (files: FileList | null, source: string) => {
-    addDebug(`${source}: ${files?.length ?? "no"} file(s)`);
-    console.log("[upload]", source, files?.length ?? "no", "file(s)");
+  const ingestFiles = (files: FileList | null) => {
+    if (!files || files.length === 0) {
+      setInfoMessage(
+        "No photos received. Please tap and try selecting again."
+      );
+      setTimeout(() => setInfoMessage(null), 5000);
+      return;
+    }
 
-    // Empty-file events are common spurious noise (e.g. fired right after we
-    // clear the input value). Just ignore them — never show an error.
-    if (!files || files.length === 0) return;
-
-    // Snapshot file metadata + create preview URLs OUTSIDE the setQueue
-    // updater so any throw from URL.createObjectURL or property access
-    // doesn't roll back the state update silently.
+    // Build items + create preview URLs OUTSIDE setQueue's updater so a
+    // throw from URL.createObjectURL doesn't silently roll back the
+    // state update.
     const fileArray = Array.from(files);
     const newItems: FileUploadStatus[] = [];
     for (const file of fileArray) {
@@ -120,8 +115,8 @@ export default function UploadSection({
       if (file.type?.startsWith("image/")) {
         try {
           previewUrl = URL.createObjectURL(file);
-        } catch (e) {
-          addDebug(`createObjectURL failed: ${e}`);
+        } catch {
+          // bad blob URL — just skip the preview, still queue the upload
         }
       }
       newItems.push({
@@ -132,7 +127,6 @@ export default function UploadSection({
         previewUrl,
       });
     }
-    addDebug(`prepared ${newItems.length} item(s)`);
 
     setQueue((prev) => {
       const seen = new Set(
@@ -153,23 +147,23 @@ export default function UploadSection({
 
   // Attach a NATIVE change/input listener to bypass React's synthetic event
   // delegation entirely. On some Android browsers (Nothing OS, Samsung,
-  // older Chrome) React's onChange is unreliable for file inputs.
+  // older Chrome) the input event delivers files reliably even when
+  // change / React onChange come back empty.
   useEffect(() => {
     const input = fileInputRef.current;
     if (!input) return;
 
     const onChange = (e: Event) => {
       const target = e.target as HTMLInputElement;
-      ingestFiles(target.files, "native change");
+      ingestFiles(target.files);
     };
     const onInput = (e: Event) => {
       const target = e.target as HTMLInputElement;
-      ingestFiles(target.files, "native input");
+      ingestFiles(target.files);
     };
 
     input.addEventListener("change", onChange);
     input.addEventListener("input", onInput);
-    addDebug("listeners attached");
     return () => {
       input.removeEventListener("change", onChange);
       input.removeEventListener("input", onInput);
@@ -396,27 +390,12 @@ export default function UploadSection({
           type="file"
           accept="image/*,video/*"
           multiple
-          onChange={(e) => ingestFiles(e.target.files, "react onChange")}
-          onClick={() => addDebug("input clicked")}
+          onChange={(e) => ingestFiles(e.target.files)}
           disabled={!selectedEvent}
           aria-label="Select photos to upload"
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed disabled:pointer-events-none"
         />
       </div>
-
-      {/* On-screen debug log — TEMPORARY while diagnosing the file
-          picker bug on certain Android phones. Shows the most recent
-          input/change events so we can see what's actually firing. */}
-      {debugLog.length > 0 && (
-        <div className="bg-neutral-100 border border-neutral-200 rounded-xl p-3 text-[11px] text-neutral-600 font-mono space-y-0.5">
-          <p className="text-[10px] uppercase tracking-widest text-neutral-400 mb-1">
-            Debug
-          </p>
-          {debugLog.map((line, i) => (
-            <div key={i}>{line}</div>
-          ))}
-        </div>
-      )}
 
       {/* Inline status message — surfaces "no files received" / similar */}
       {infoMessage && (
