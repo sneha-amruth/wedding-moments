@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import LoadingScreen from "@/components/ui/LoadingScreen";
-import EventSelector from "@/components/dashboard/EventSelector";
 import UploadSection from "@/components/dashboard/UploadSection";
 import GallerySection from "@/components/dashboard/GallerySection";
 import type { WeddingEvent, Upload } from "@/types/database";
@@ -16,14 +15,12 @@ export default function DashboardPage() {
   const router = useRouter();
 
   const [events, setEvents] = useState<WeddingEvent[]>([]);
-  const [selectedEvent, setSelectedEvent] = useState<WeddingEvent | null>(null);
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>("upload");
   const [loadingData, setLoadingData] = useState(true);
 
   const weddingId = process.env.NEXT_PUBLIC_WEDDING_ID!;
 
-  // Redirect if not authenticated
   useEffect(() => {
     if (!loading) {
       if (!firebaseUser) {
@@ -34,8 +31,6 @@ export default function DashboardPage() {
     }
   }, [loading, firebaseUser, guest, router]);
 
-  // Fetch events; default-select today's event (or closest by date) so guests
-  // uploading at the venue land on the right event automatically.
   useEffect(() => {
     if (!guest) return;
     const fetchEvents = async () => {
@@ -44,7 +39,6 @@ export default function DashboardPage() {
         const data = await res.json();
         if (data.events && data.events.length > 0) {
           setEvents(data.events);
-          setSelectedEvent(pickDefaultEvent(data.events));
         }
       } catch (err) {
         console.error("Failed to fetch events:", err);
@@ -55,48 +49,16 @@ export default function DashboardPage() {
     fetchEvents();
   }, [guest, weddingId]);
 
-  function pickDefaultEvent(events: WeddingEvent[]): WeddingEvent {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayMs = today.getTime();
-
-    // 1. Exact match: an event whose date is today
-    const exactMatch = events.find((e) => {
-      if (!e.date) return false;
-      const d = new Date(e.date);
-      d.setHours(0, 0, 0, 0);
-      return d.getTime() === todayMs;
-    });
-    if (exactMatch) return exactMatch;
-
-    // 2. Otherwise: the dated event closest to today (past or future)
-    const dated = events.filter((e) => e.date);
-    if (dated.length > 0) {
-      return dated.reduce((closest, e) => {
-        const cd = Math.abs(new Date(closest.date!).getTime() - todayMs);
-        const ed = Math.abs(new Date(e.date!).getTime() - todayMs);
-        return ed < cd ? e : closest;
-      });
-    }
-
-    // 3. Fallback: first event by sort_order
-    return events[0];
-  }
-
-  // Fetch uploads for the guest
   const fetchUploads = useCallback(async () => {
     if (!guest) return;
     try {
-      const url = selectedEvent
-        ? `/api/uploads?guestId=${guest.id}&eventId=${selectedEvent.id}`
-        : `/api/uploads?guestId=${guest.id}`;
-      const res = await fetch(url);
+      const res = await fetch(`/api/uploads?guestId=${guest.id}`);
       const data = await res.json();
       setUploads(data.uploads || []);
     } catch (err) {
       console.error("Failed to fetch uploads:", err);
     }
-  }, [guest, selectedEvent]);
+  }, [guest]);
 
   useEffect(() => {
     fetchUploads();
@@ -113,7 +75,6 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-neutral-50">
-      {/* Header */}
       <header className="bg-black px-4 py-3 sticky top-0 z-30">
         <div className="max-w-lg mx-auto flex items-center justify-between">
           <div>
@@ -131,14 +92,6 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {/* Event Selector */}
-      <EventSelector
-        events={events}
-        selectedEvent={selectedEvent}
-        onSelect={setSelectedEvent}
-      />
-
-      {/* Tab Bar */}
       <div className="bg-white border-b border-neutral-200 sticky top-[52px] z-20">
         <div className="max-w-lg mx-auto flex">
           {(["upload", "gallery"] as Tab[]).map((tab) => (
@@ -161,18 +114,18 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Content */}
       <main className="flex-1 max-w-lg mx-auto w-full px-4 py-5">
         {activeTab === "upload" ? (
           <UploadSection
             guest={guest}
-            selectedEvent={selectedEvent}
+            events={events}
             weddingId={weddingId}
             onUploadComplete={fetchUploads}
           />
         ) : (
           <GallerySection
             uploads={uploads}
+            events={events}
             currentGuestId={guest.id}
             onDelete={fetchUploads}
           />
