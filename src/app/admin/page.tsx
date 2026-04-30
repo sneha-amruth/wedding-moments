@@ -74,6 +74,9 @@ export default function AdminPage() {
   const [selectedEvent, setSelectedEvent] = useState<string>("all");
   const [activeTab, setActiveTab] = useState<"photos" | "guests">("photos");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
   const touchStartX = useRef<number | null>(null);
 
   // Check for existing session
@@ -166,6 +169,42 @@ export default function AdminPage() {
       fetchStats();
     } catch (err) {
       console.error("Feature toggle error:", err);
+    }
+  };
+
+  const toggleSelected = (uploadId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(uploadId)) next.delete(uploadId);
+      else next.add(uploadId);
+      return next;
+    });
+  };
+
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  };
+
+  const handleBulkFeature = async (featured: boolean) => {
+    if (selectedIds.size === 0) return;
+    setBulkBusy(true);
+    try {
+      await Promise.all(
+        Array.from(selectedIds).map((id) =>
+          fetch(`/api/upload/${id}/feature`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ is_featured: featured }),
+          })
+        )
+      );
+      await fetchStats();
+      exitSelectMode();
+    } catch (err) {
+      console.error("Bulk feature error:", err);
+    } finally {
+      setBulkBusy(false);
     }
   };
 
@@ -339,12 +378,49 @@ export default function AdminPage() {
             filteredUploads.length === 0 ? (
               <p className="text-center text-sm text-neutral-400 py-8">No uploads yet</p>
             ) : (
+              <>
+                {/* Select-mode toolbar */}
+                <div className="flex items-center justify-between mb-3">
+                  {selectMode ? (
+                    <>
+                      <span className="text-sm text-black">
+                        {selectedIds.size} selected
+                      </span>
+                      <button
+                        onClick={exitSelectMode}
+                        className="text-xs text-neutral-500 hover:text-black underline"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-xs text-neutral-400">
+                        Tap a photo to view, or use Select for bulk actions
+                      </span>
+                      <button
+                        onClick={() => setSelectMode(true)}
+                        className="text-xs font-medium text-black underline"
+                      >
+                        Select
+                      </button>
+                    </>
+                  )}
+                </div>
+
               <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
                 {filteredUploads.map((upload, idx) => (
                   <div key={upload.id} className="relative group">
                     <div
-                      className="aspect-square rounded-lg overflow-hidden bg-neutral-100 cursor-pointer"
-                      onClick={() => setLightboxIndex(idx)}
+                      className={`aspect-square rounded-lg overflow-hidden bg-neutral-100 cursor-pointer ${
+                        selectMode && selectedIds.has(upload.id)
+                          ? "ring-2 ring-black ring-offset-2"
+                          : ""
+                      }`}
+                      onClick={() => {
+                        if (selectMode) toggleSelected(upload.id);
+                        else setLightboxIndex(idx);
+                      }}
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
@@ -360,7 +436,22 @@ export default function AdminPage() {
                         </svg>
                       </div>
                     )}
-                    {/* Overlay on hover */}
+                    {selectMode && (
+                      <div
+                        className={`absolute top-1.5 left-1.5 w-6 h-6 rounded-full flex items-center justify-center border-2 ${
+                          selectedIds.has(upload.id)
+                            ? "bg-black border-black"
+                            : "bg-white/80 border-white"
+                        }`}
+                      >
+                        {selectedIds.has(upload.id) && (
+                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </div>
+                    )}
+                    {/* Overlay on hover (desktop only — disabled in select mode) */}
                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex flex-col items-center justify-center gap-1 pointer-events-none group-hover:pointer-events-auto px-2">
                       <p className="text-white text-[10px] truncate max-w-full">
                         {guestMap.get(upload.guest_id)?.name || "Unknown"}
@@ -400,6 +491,7 @@ export default function AdminPage() {
                   </div>
                 ))}
               </div>
+              </>
             )
           ) : (
             stats.guests.length === 0 ? (
@@ -426,6 +518,31 @@ export default function AdminPage() {
           )}
         </div>
       </div>
+
+      {/* Bulk action bar — sticky bottom, shown only in select mode */}
+      {selectMode && selectedIds.size > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 bg-black text-white px-4 py-3 z-40 shadow-2xl">
+          <div className="max-w-4xl mx-auto flex items-center gap-2">
+            <span className="text-sm flex-1">
+              {selectedIds.size} selected
+            </span>
+            <button
+              onClick={() => handleBulkFeature(true)}
+              disabled={bulkBusy}
+              className="px-4 py-2 rounded-full bg-yellow-400 text-black text-sm font-medium hover:bg-yellow-300 transition-colors disabled:opacity-50"
+            >
+              {bulkBusy ? "Working..." : "★ Feature all"}
+            </button>
+            <button
+              onClick={() => handleBulkFeature(false)}
+              disabled={bulkBusy}
+              className="px-4 py-2 rounded-full bg-white/10 border border-white/20 text-white text-sm font-medium hover:bg-white/20 transition-colors disabled:opacity-50"
+            >
+              Unfeature
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Lightbox */}
       {lightboxUpload && lightboxIndex !== null && (
