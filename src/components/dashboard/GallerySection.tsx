@@ -71,6 +71,26 @@ export default function GallerySection({
     }
   };
 
+  // Group uploads by event, preserving the flat order for the lightbox so
+  // prev/next still navigates through everything chronologically.
+  // NOTE: must be declared before any conditional return so the hook order
+  // stays consistent across renders (React error #310).
+  const grouped = useMemo(() => {
+    const eventOrder = new Map(events.map((e, i) => [e.id, i]));
+    const groups = new Map<string, Upload[]>();
+    for (const u of uploads) {
+      const list = groups.get(u.event_id) ?? [];
+      list.push(u);
+      groups.set(u.event_id, list);
+    }
+    return Array.from(groups.entries())
+      .sort(([a], [b]) => (eventOrder.get(a) ?? 99) - (eventOrder.get(b) ?? 99))
+      .map(([eventId, items]) => ({
+        event: events.find((e) => e.id === eventId),
+        items,
+      }));
+  }, [uploads, events]);
+
   if (uploads.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -96,24 +116,6 @@ export default function GallerySection({
       </div>
     );
   }
-
-  // Group uploads by event, preserving the flat order for the lightbox so
-  // prev/next still navigates through everything chronologically.
-  const grouped = useMemo(() => {
-    const eventOrder = new Map(events.map((e, i) => [e.id, i]));
-    const groups = new Map<string, Upload[]>();
-    for (const u of uploads) {
-      const list = groups.get(u.event_id) ?? [];
-      list.push(u);
-      groups.set(u.event_id, list);
-    }
-    return Array.from(groups.entries())
-      .sort(([a], [b]) => (eventOrder.get(a) ?? 99) - (eventOrder.get(b) ?? 99))
-      .map(([eventId, items]) => ({
-        event: events.find((e) => e.id === eventId),
-        items,
-      }));
-  }, [uploads, events]);
 
   return (
     <>
