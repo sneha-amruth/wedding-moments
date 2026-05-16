@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { generateAdminToken } from "@/lib/admin-auth";
 
 /**
  * POST /api/admin/login
@@ -17,8 +18,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid password" }, { status: 401 });
     }
 
-    // Simple token — hash of password + date (good enough for a wedding app)
-    const token = Buffer.from(`admin:${adminPassword}:${Date.now()}`).toString("base64");
+    const token = generateAdminToken(adminPassword);
 
     return NextResponse.json({ token });
   } catch {

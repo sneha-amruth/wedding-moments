@@ -31,6 +31,19 @@ interface Upload {
   created_at: string;
 }
 
+function adminFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const token = typeof window !== "undefined"
+    ? sessionStorage.getItem("admin_token")
+    : null;
+  return fetch(url, {
+    ...options,
+    headers: {
+      ...(options.headers as Record<string, string> | undefined),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+}
+
 function driveImageUrl(fileId: string, size = 1920): string {
   return `https://drive.google.com/thumbnail?id=${fileId}&sz=w${size}`;
 }
@@ -111,7 +124,7 @@ export default function AdminPage() {
   const fetchStats = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/stats");
+      const res = await adminFetch("/api/admin/stats");
       const data = await res.json();
       setStats(data);
     } catch (err) {
@@ -152,7 +165,7 @@ export default function AdminPage() {
   const handleDelete = async (uploadId: string) => {
     if (!confirm("Delete this upload?")) return;
     try {
-      await fetch(`/api/upload/${uploadId}`, { method: "DELETE" });
+      await adminFetch(`/api/upload/${uploadId}`, { method: "DELETE" });
       fetchStats();
     } catch (err) {
       console.error("Delete error:", err);
@@ -161,7 +174,7 @@ export default function AdminPage() {
 
   const handleToggleFeature = async (uploadId: string, currentValue: boolean) => {
     try {
-      await fetch(`/api/upload/${uploadId}/feature`, {
+      await adminFetch(`/api/upload/${uploadId}/feature`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ is_featured: !currentValue }),
@@ -192,7 +205,7 @@ export default function AdminPage() {
     try {
       await Promise.all(
         Array.from(selectedIds).map((id) =>
-          fetch(`/api/upload/${id}/feature`, {
+          adminFetch(`/api/upload/${id}/feature`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ is_featured: featured }),
@@ -210,7 +223,7 @@ export default function AdminPage() {
 
   const handleMoveToEvent = async (uploadId: string, eventId: string) => {
     try {
-      await fetch(`/api/upload/${uploadId}/move`, {
+      await adminFetch(`/api/upload/${uploadId}/move`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ event_id: eventId }),

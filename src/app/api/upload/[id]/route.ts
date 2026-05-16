@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { deleteFileFromDrive } from "@/lib/google-drive";
+import { verifyAdminToken } from "@/lib/admin-auth";
 
 /**
  * DELETE /api/upload/[id]
@@ -21,6 +22,15 @@ export async function DELETE(
 
     if (fetchError || !upload) {
       return NextResponse.json({ error: "Upload not found" }, { status: 404 });
+    }
+
+    // Admin can delete anything; guests can only delete their own uploads.
+    if (!verifyAdminToken(request)) {
+      const { searchParams } = new URL(request.url);
+      const guestId = searchParams.get("guestId");
+      if (!guestId || upload.guest_id !== guestId) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
     }
 
     // Delete from Google Drive (drive_file_id is the Drive file ID).

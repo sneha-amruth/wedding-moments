@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { scanPhotosForGuest } from "@/lib/scan-photos";
+import { verifyAdminToken } from "@/lib/admin-auth";
 
 export const maxDuration = 60;
 
@@ -11,9 +12,12 @@ export const maxDuration = 60;
  * this automatically).
  */
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!verifyAdminToken(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   const { id } = await params;
   if (!id) {
     return NextResponse.json({ error: "guest id required" }, { status: 400 });

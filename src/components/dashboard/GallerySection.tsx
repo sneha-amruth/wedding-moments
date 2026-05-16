@@ -59,7 +59,7 @@ export default function GallerySection({
 
     setDeleting(uploadId);
     try {
-      const res = await fetch(`/api/upload/${uploadId}`, { method: "DELETE" });
+      const res = await fetch(`/api/upload/${uploadId}?guestId=${currentGuestId}`, { method: "DELETE" });
       if (res.ok) {
         setViewingIndex(null);
         onDelete();

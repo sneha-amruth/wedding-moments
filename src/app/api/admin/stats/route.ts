@@ -1,11 +1,15 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { verifyAdminToken } from "@/lib/admin-auth";
 
 /**
  * GET /api/admin/stats
  * Return dashboard statistics
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  if (!verifyAdminToken(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   try {
     const weddingId = process.env.NEXT_PUBLIC_WEDDING_ID;
 
